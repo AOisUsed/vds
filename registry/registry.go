@@ -5,7 +5,7 @@ import (
 )
 
 type VDRegistry struct {
-	vdsByVdID map[string]chan<- message.Message //
+	vdsByVdID map[string]chan<- message.Message // vd 到 vds 消息入口的映射
 }
 
 func NewRegistry() *VDRegistry {
