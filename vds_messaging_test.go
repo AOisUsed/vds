@@ -10,7 +10,7 @@ import (
 	"virturalDevice/message"
 	"virturalDevice/registry"
 	"virturalDevice/vds"
-	"virturalDevice/virtual_device"
+	"virturalDevice/vds/virtual_device"
 )
 
 func TestVDMessage(T *testing.T) {

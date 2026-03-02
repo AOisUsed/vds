@@ -20,11 +20,11 @@ type VDS struct {
 	ingressRouter *router.IngressRouter // 消息入站路由
 	egressRouter  *router.EgressRouter  // 消息出站路由
 
+	registry       *registry.VDRegistry            // 注册中心
+	registrySyncer *registry_syncer.RegistrySyncer // 注册同步器
+
 	dispatcher *router.Dispatcher //消息分发器
 
-	registry *registry.VDRegistry // 注册中心
-
-	registrySyncer *registry_syncer.RegistrySyncer // 注册同步器
 }
 
 // NewVDS 初始化VDS(无设备)
@@ -35,16 +35,17 @@ func NewVDS(inputCh chan message.Message, outputCh chan message.Message, registr
 		outputCh:       outputCh,
 		ingressRouter:  router.NewIngressRouter(inputCh, make(map[string]chan<- message.Message)),
 		egressRouter:   router.NewEgressRouter([]<-chan message.Message{}, outputCh),
-		dispatcher:     router.NewDispatcher(outputCh, registry),
 		registry:       registry,
 		registrySyncer: registry_syncer.NewRegistrySyncer(registry),
 	}
+	vds.dispatcher = router.NewDispatcher(outputCh, vds.registrySyncer)
+
 	return vds
 }
 
-// RegisterDevice 注册设备到vds中，同时将设备的输入输出通道添加到vds的路由器和聚合器中，再通过调用registrySyncer把设备注册到注册中心中
+// RegisterDevice 注册设备到vds中，同时将设备的输入输出通道添加到vds的进站路由器和出站路由器中，再通过调用registrySyncer把设备注册到注册中心中
 func (vds *VDS) RegisterDevice(device *virtual_device.VirtualDevice) {
-	// 本地注册 vd
+	// 本地注册 vd 到设备列表，并加入进站出站路由中
 	vds.deviceById[device.ID] = device
 	vds.ingressRouter.AddOutboundCh(device.ID, device.ReceiveChan())
 	vds.egressRouter.AddIncomingCh(device.SendChan())

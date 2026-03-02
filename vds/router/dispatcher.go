@@ -2,18 +2,18 @@ package router
 
 import (
 	"virturalDevice/message"
-	"virturalDevice/registry"
+	"virturalDevice/vds/registry_syncer"
 )
 
 type Dispatcher struct {
-	incomingCh <-chan message.Message
-	vdRegistry *registry.VDRegistry
+	incomingCh     <-chan message.Message          // 出站消息统一出口
+	registrySyncer *registry_syncer.RegistrySyncer // 本地注册同步器
 }
 
-func NewDispatcher(incomingCh <-chan message.Message, registry *registry.VDRegistry) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message.Message, registrySyncer *registry_syncer.RegistrySyncer) *Dispatcher {
 	return &Dispatcher{
-		incomingCh: incomingCh,
-		vdRegistry: registry,
+		incomingCh:     incomingCh,
+		registrySyncer: registrySyncer,
 	}
 }
 
@@ -26,6 +26,6 @@ func (d *Dispatcher) Serve() {
 
 // Dispatch 根据消息中dstId和注册中心中vds消息接收通道分发单条消息到对应vds
 func (d *Dispatcher) Dispatch(incomingMsg message.Message) {
-	sendCh := d.vdRegistry.GetSendChan(incomingMsg.DstID)
+	sendCh := d.registrySyncer.GetSendChan(incomingMsg.DstID)
 	sendCh <- incomingMsg
 }

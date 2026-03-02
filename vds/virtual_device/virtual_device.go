@@ -7,10 +7,11 @@ import (
 )
 
 type VirtualDevice struct {
-	ID        string
-	cipher    cipher.Cipher        // 密码机
-	receiveCh chan message.Message // 消息接收通道
-	sendCh    chan message.Message // 消息发送通道
+	ID         string
+	cipher     cipher.Cipher        // 密码机
+	receiveCh  chan message.Message // 消息接收通道
+	sendCh     chan message.Message // 消息发送通道
+	attributes Flag                 //电台属性
 }
 
 func NewVirtualDevice(id string, cipher cipher.Cipher) *VirtualDevice {
@@ -67,4 +68,9 @@ func (vd *VirtualDevice) Send(dstId string, body []byte) {
 func (vd *VirtualDevice) Stop() {
 	close(vd.receiveCh)
 	close(vd.sendCh)
+}
+
+// Matches 对比两个电台参数是否匹配
+func (vd *VirtualDevice) attributeMatches(targetAttributes Flag) bool {
+	return vd.attributes == targetAttributes
 }

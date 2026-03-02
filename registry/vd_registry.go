@@ -5,26 +5,26 @@ import (
 )
 
 type VDRegistry struct {
-	vdsByVdID map[string]chan<- message.Message // vd 到 vds 消息入口的映射
+	VdsByVdID map[string]chan<- message.Message // vd 到 vds 消息入口的映射
 }
 
 func NewRegistry() *VDRegistry {
 	return &VDRegistry{
-		vdsByVdID: make(map[string]chan<- message.Message),
+		VdsByVdID: make(map[string]chan<- message.Message),
 	}
 }
 
 // RegisterVD 注册虚拟设备到注册中心中
 func (r *VDRegistry) RegisterVD(vdId string, sendChan chan<- message.Message) {
-	r.vdsByVdID[vdId] = sendChan
+	r.VdsByVdID[vdId] = sendChan
 }
 
 // DeRegisterVD 删除虚拟设备
 func (r *VDRegistry) DeRegisterVD(vdId string) {
-	delete(r.vdsByVdID, vdId)
+	delete(r.VdsByVdID, vdId)
 }
 
 // GetSendChan 获取vd所在vds的消息发送通道
 func (r *VDRegistry) GetSendChan(vdId string) chan<- message.Message {
-	return r.vdsByVdID[vdId]
+	return r.VdsByVdID[vdId]
 }
