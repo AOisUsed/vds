@@ -17,7 +17,7 @@ func NewEgressRouter(inputChs []<-chan message.Message, outputCh chan<- message.
 	}
 }
 
-// 添加接收本vds虚拟设备消息的通道
+// AddIncomingCh 添加接收本vds虚拟设备消息的通道
 func (a *EgressRouter) AddIncomingCh(inputCh <-chan message.Message) {
 	a.incomingCh = append(a.incomingCh, inputCh)
 }
