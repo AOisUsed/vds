@@ -69,8 +69,3 @@ func (vd *VirtualDevice) Stop() {
 	close(vd.receiveCh)
 	close(vd.sendCh)
 }
-
-// Matches 对比两个电台参数是否匹配
-func (vd *VirtualDevice) attributeMatches(targetAttributes Flag) bool {
-	return vd.attributes == targetAttributes
-}

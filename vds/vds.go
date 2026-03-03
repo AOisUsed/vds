@@ -1,10 +1,13 @@
 package vds
 
 import (
+	"log"
 	"virturalDevice/message"
-	"virturalDevice/registry"
-	"virturalDevice/vds/registry_syncer"
+	"virturalDevice/vds/address"
+	"virturalDevice/vds/dispatcher"
+	"virturalDevice/vds/repository"
 	"virturalDevice/vds/router"
+	"virturalDevice/vds/sender"
 	"virturalDevice/vds/virtual_device"
 )
 
@@ -20,25 +23,28 @@ type VDS struct {
 	ingressRouter *router.IngressRouter // 消息入站路由
 	egressRouter  *router.EgressRouter  // 消息出站路由
 
-	registry       *registry.VDRegistry            // 注册中心
-	registrySyncer *registry_syncer.RegistrySyncer // 注册同步器
+	vdRepository repository.VDRepository // 所有虚拟设备信息仓库
 
-	dispatcher *router.Dispatcher //消息分发器
+	dispatcher *dispatcher.Dispatcher //消息分发器
 
+	sender sender.Sender //消息出站发送器
+
+	address address.Address // vds 地址
 }
 
 // NewVDS 初始化VDS(无设备)
-func NewVDS(inputCh chan message.Message, outputCh chan message.Message, registry *registry.VDRegistry) *VDS {
+func NewVDS(inputCh chan message.Message, outputCh chan message.Message, vdRepository repository.VDRepository, sender sender.Sender, address address.Address) *VDS {
 	vds := &VDS{
-		deviceById:     make(map[string]*virtual_device.VirtualDevice),
-		inputCh:        inputCh,
-		outputCh:       outputCh,
-		ingressRouter:  router.NewIngressRouter(inputCh, make(map[string]chan<- message.Message)),
-		egressRouter:   router.NewEgressRouter([]<-chan message.Message{}, outputCh),
-		registry:       registry,
-		registrySyncer: registry_syncer.NewRegistrySyncer(registry),
+		deviceById:    make(map[string]*virtual_device.VirtualDevice),
+		inputCh:       inputCh,
+		outputCh:      outputCh,
+		ingressRouter: router.NewIngressRouter(inputCh, make(map[string]chan<- message.Message)),
+		egressRouter:  router.NewEgressRouter([]<-chan message.Message{}, outputCh),
+		vdRepository:  vdRepository,
+		dispatcher:    dispatcher.NewDispatcher(outputCh, vdRepository, sender),
+		sender:        sender,
+		address:       address,
 	}
-	vds.dispatcher = router.NewDispatcher(outputCh, vds.registrySyncer)
 
 	return vds
 }
@@ -50,8 +56,12 @@ func (vds *VDS) RegisterDevice(device *virtual_device.VirtualDevice) {
 	vds.ingressRouter.AddOutboundCh(device.ID, device.ReceiveChan())
 	vds.egressRouter.AddIncomingCh(device.SendChan())
 
-	// 调用 registrySyncer 注册vd到registry中
-	vds.registrySyncer.RegisterVD(device.ID, vds.inputCh)
+	// 调用 vdRepository 把vd注册到registry中
+	err := vds.vdRepository.SetVDAddrById(device.ID, vds.address)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 }
 
 // Serve 启动vds服务

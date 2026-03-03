@@ -111,3 +111,11 @@ const (
 	NoiseSwitchOn  NoiseSwitchType = iota // 开
 	NoiseSwitchOff                        // 关
 )
+
+// IsCompatibleWith 判断有两个不同属性的设备是否可以联络（简单模拟实现）
+func (f *Flag) IsCompatibleWith(other Flag) bool {
+	if f.CallMode == other.CallMode && f.CryptoMode == other.CryptoMode {
+		return true
+	}
+	return false
+}
