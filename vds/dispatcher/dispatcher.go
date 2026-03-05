@@ -1,10 +1,13 @@
+// Package dispatcher
+// 消息分发器负责计算消息可达目标，并发送至对应目标
 package dispatcher
 
 import (
+	"context"
 	"log"
-	"net"
+	"sync"
+	"time"
 	"virturalDevice/message"
-	"virturalDevice/vds/address"
 	"virturalDevice/vds/repository"
 	"virturalDevice/vds/sender"
 )
@@ -27,89 +30,107 @@ func NewDispatcher(incomingCh <-chan message.Message, vdRepository repository.VD
 // Serve 运行消息分发器
 func (d *Dispatcher) Serve() {
 	for msg := range d.incomingCh {
-		go d.Dispatch(msg) // 使用goroutine并发分发消息，因为dispatch耗时，不应阻塞dispatcher接收新的消息
+		go func() { // 使用goroutine并发分发消息，因为dispatch耗时，不应阻塞dispatcher接收新的消息
+			// todo:暂时假设由消息分发器来决定每条消息发送的生命周期，最大为0.5秒，超时则取消消息发送。实际情况下，生命周期可能由发送消息的vd来决定，比如说关机就取消消息发送。
+			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
+			defer cancel()
+			d.Dispatch(ctx, msg)
+		}()
 	}
 }
 
-// Dispatch 根据消息中信息和注册中心中vds消息接收通道分发单条消息到对应vds
-func (d *Dispatcher) Dispatch(incomingMsg message.Message) {
-	// 如果有明确的目标id(点对点发送):
-	// 直接查询目标是否可达，如果可达则发送
-	if incomingMsg.DstID != "" {
-		dstId := incomingMsg.DstID
-		srcState, err := d.vdRepository.GetVDStateById(dstId)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		dstState, err := d.vdRepository.GetVDStateById(incomingMsg.DstID)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		if srcState.IsCompatibleWith(dstState) {
-			dstAddr, err := d.vdRepository.GetVDAddrById(dstId)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			if err = d.sender.Send(dstAddr, incomingMsg); err != nil {
-				log.Println(err)
-				return
-			}
-		}
+// Dispatch 分发消息
+func (d *Dispatcher) Dispatch(ctx context.Context, incomingMsg message.Message) {
+	select {
+	case <-ctx.Done():
+		log.Printf("dispatcher context done")
 		return
+	default:
+		if incomingMsg.DstID != "" {
+			d.dispatchUnicast(ctx, incomingMsg)
+		} else {
+			d.dispatchMulticast(ctx, incomingMsg)
+		}
 	}
+}
 
-	// 如果没有明确的目标地址，执行以下分支：
-	// 获得所有可达的目标设备的 ID
-	srcId := incomingMsg.SrcID
-	dstIds, err := d.FindReachableVDs(srcId)
+// dispatchUnicast 分发单播消息（消息有明确目标地址的情况）
+func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
+	srcState, err := d.vdRepository.GetVDStateById(ctx, msg.SrcID)
 	if err != nil {
-		log.Println(err)
+		log.Printf("无法获取消息来源设备 %s 的状态: %v", msg.SrcID, err)
 		return
 	}
 
-	var dstAddrById map[string]address.Address
-
-	// 根据可达设备 ID 获得目标设备地址
-	for _, dstId := range dstIds {
-		dstAddr, err := d.vdRepository.GetVDAddrById(dstId)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		dstAddrById[dstId] = dstAddr
+	dstState, err := d.vdRepository.GetVDStateById(ctx, msg.DstID)
+	if err != nil {
+		log.Printf("无法获取消息目标设备 %s 的状态: %v", msg.DstID, err)
+		return
 	}
 
-	// 调用 Sender 向目标设备发送消息
-	for dstId, dstAddr := range dstAddrById {
-		msgToSend := message.Message{
-			SrcID: srcId,
-			DstID: dstId,
-			Body:  incomingMsg.Body,
-		}
-		if err = d.sender.Send(dstAddr, msgToSend); err != nil {
-			log.Println(err)
-			continue
-		}
+	if !srcState.IsCompatibleWith(dstState) {
+		log.Printf("消息来源 %s 设备与 消息目标 %s 设备无法沟通", msg.SrcID, msg.DstID)
+		return
+	}
+
+	dstAddr, err := d.vdRepository.GetVDAddrById(ctx, msg.DstID)
+	if err != nil {
+		log.Printf("无法获取目标设备 %s 的地址: %v", msg.DstID, err)
+		return
+	}
+
+	if err = d.sender.Send(dstAddr, msg); err != nil {
+		log.Printf("无法给 %s 发送消息: %v", msg.DstID, err)
 	}
 }
 
-// FindReachableVDs 根据消息来源设备id找到能够到达的目标设备id
-func (d *Dispatcher) FindReachableVDs(srcId string) ([]string, error) {
+// dispatchUnicast 分发多播消息（消息无明确目标地址的情况）
+func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message) {
+	dstIDs, err := d.FindValidTargetVDs(ctx, msg.SrcID)
+	if err != nil {
+		log.Printf("无法找到消息来源设备 %s 可联络的设备: %v", msg.SrcID, err)
+		return
+	}
+
+	var wg sync.WaitGroup
+
+	// 并发向所有可达设备发送消息
+	for _, dstID := range dstIDs {
+		wg.Add(1)
+		go func(dstID string) {
+			defer wg.Done()
+			dstAddr, err := d.vdRepository.GetVDAddrById(ctx, dstID)
+			if err != nil {
+				log.Printf("无法获取多播消息目标设备 %s 的地址: %v", dstID, err)
+				return
+			}
+
+			msgToSend := message.Message{
+				SrcID: msg.SrcID,
+				DstID: dstID,
+				Body:  msg.Body,
+			}
+
+			if err = d.sender.Send(dstAddr, msgToSend); err != nil {
+				log.Printf("无法获取单播消息目标设备 %s 的地址: %v", dstID, err)
+				return
+			}
+		}(dstID)
+	}
+	wg.Wait()
+}
+
+// FindValidTargetVDs 根据消息来源设备id找到能够到达的目标设备id (指能够接收，且通信参数匹配可以沟通)
+func (d *Dispatcher) FindValidTargetVDs(ctx context.Context, srcId string) ([]string, error) {
 	// 1. 获得所有在线设备信息 (包括消息来源设备)
-	onlineVDById, err := d.vdRepository.GetAllVDStates()
+	onlineVDById, err := d.vdRepository.GetAllVDStates(ctx)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 
 	// 2. 计算得到可达设备id
-	var reachableVDIds []string
+	var validTargetVDs []string
 	srcVDState := onlineVDById[srcId]
 
 	for id, vdState := range onlineVDById {
@@ -117,12 +138,8 @@ func (d *Dispatcher) FindReachableVDs(srcId string) ([]string, error) {
 			continue
 		}
 		if srcVDState.IsCompatibleWith(vdState) {
-			reachableVDIds = append(reachableVDIds, id)
+			validTargetVDs = append(validTargetVDs, id)
 		}
 	}
-	return reachableVDIds, nil
-}
-
-func (d *Dispatcher) Send(dstAddr net.UDPAddr, msg message.Message) {
-
+	return validTargetVDs, nil
 }
