@@ -2,9 +2,10 @@ package sender
 
 import (
 	"virturalDevice/message"
-	"virturalDevice/vds/address"
+	"virturalDevice/vds/connection"
 )
 
+// Sender vds内统一消息发送器
 type Sender interface {
-	Send(dst address.Address, message message.Message) error
+	Send(dst connection.Conn, message message.Message) error
 }

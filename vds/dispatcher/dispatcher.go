@@ -14,33 +14,47 @@ import (
 
 // Dispatcher 消息分发器
 type Dispatcher struct {
-	incomingCh   <-chan message.Message // 出站消息统一出口
+	incomingCh   <-chan message.Message // 接收来自消息集中器的消息
 	vdRepository repository.VDRepository
 	sender       sender.Sender
+
+	workerPool *DispatchWorkerPool
 }
 
-func NewDispatcher(incomingCh <-chan message.Message, vdRepository repository.VDRepository, sender sender.Sender) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message.Message, vdRepository repository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
 	return &Dispatcher{
 		incomingCh:   incomingCh,
 		vdRepository: vdRepository,
 		sender:       sender,
+		workerPool:   NewDispatchWorkerPool(incomingCh, numWorkers),
 	}
 }
 
 // Serve 运行消息分发器
-func (d *Dispatcher) Serve() {
+func (d *Dispatcher) Serve() { // todo:未完成
+	for i := 0; i < d.workerPool.numWorkers; i++ {
+		go d.worker()
+	}
+}
+
+// Stop 停止消息分发器
+func (d *Dispatcher) Stop() {
+	close(d.workerPool.done)
+}
+
+// worker 实际执行dispatch的worker
+func (d *Dispatcher) worker(ctx context.Context) {
 	for msg := range d.incomingCh {
-		go func() { // 使用goroutine并发分发消息，因为dispatch耗时，不应阻塞dispatcher接收新的消息
-			// todo:暂时假设由消息分发器来决定每条消息发送的生命周期，最大为0.5秒，超时则取消消息发送。实际情况下，生命周期可能由发送消息的vd来决定，比如说关机就取消消息发送。
-			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 			defer cancel()
-			d.Dispatch(ctx, msg)
+			d.dispatch(ctx, msg)
 		}()
 	}
 }
 
-// Dispatch 分发消息
-func (d *Dispatcher) Dispatch(ctx context.Context, incomingMsg message.Message) {
+// dispatch 分发消息
+func (d *Dispatcher) dispatch(ctx context.Context, incomingMsg message.Message) {
 	select {
 	case <-ctx.Done():
 		log.Printf("dispatcher context done")
@@ -73,7 +87,7 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 		return
 	}
 
-	dstAddr, err := d.vdRepository.GetVDAddrById(ctx, msg.DstID)
+	dstAddr, err := d.vdRepository.GetVDConnById(ctx, msg.DstID)
 	if err != nil {
 		log.Printf("无法获取目标设备 %s 的地址: %v", msg.DstID, err)
 		return
@@ -99,24 +113,25 @@ func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message)
 		wg.Add(1)
 		go func(dstID string) {
 			defer wg.Done()
-			dstAddr, err := d.vdRepository.GetVDAddrById(ctx, dstID)
+			dstAddr, err := d.vdRepository.GetVDConnById(ctx, dstID)
 			if err != nil {
 				log.Printf("无法获取多播消息目标设备 %s 的地址: %v", dstID, err)
 				return
 			}
 
 			msgToSend := message.Message{
-				SrcID: msg.SrcID,
-				DstID: dstID,
-				Body:  msg.Body,
+				SrcID:   msg.SrcID,
+				DstID:   dstID,
+				Payload: msg.Payload,
 			}
 
 			if err = d.sender.Send(dstAddr, msgToSend); err != nil {
-				log.Printf("无法获取单播消息目标设备 %s 的地址: %v", dstID, err)
+				log.Printf("无法获取多播消息目标设备 %s 的地址: %v", dstID, err)
 				return
 			}
 		}(dstID)
 	}
+
 	wg.Wait()
 }
 

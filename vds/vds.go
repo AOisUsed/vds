@@ -1,9 +1,10 @@
 package vds
 
 import (
+	"context"
 	"log"
 	"virturalDevice/message"
-	"virturalDevice/vds/address"
+	"virturalDevice/vds/connection"
 	"virturalDevice/vds/dispatcher"
 	"virturalDevice/vds/repository"
 	"virturalDevice/vds/router"
@@ -15,35 +16,35 @@ type VDS struct {
 	// 设备
 	deviceById map[string]*virtual_device.VirtualDevice // 设备id-实体映射
 
+	// vds 地址
+	address connection.Conn
+
 	// 统一消息出入口
 	inputCh  chan message.Message // 整体消息入口
 	outputCh chan message.Message // 整体消息出口
 
-	// 消息路由
-	ingressRouter *router.IngressRouter // 消息入站路由
-	egressRouter  *router.EgressRouter  // 消息出站路由
+	// 消息处理
+	ingressRouter *router.IngressRouter  // 消息入口路由
+	aggregator    *router.Aggregator     // 消息集合器
+	dispatcher    *dispatcher.Dispatcher //消息分发器
+	sender        sender.Sender          //消息出口发送器
 
-	vdRepository repository.VDRepository // 所有虚拟设备信息仓库
-
-	dispatcher *dispatcher.Dispatcher //消息分发器
-
-	sender sender.Sender //消息出站发送器
-
-	address address.Address // vds 地址
+	// 数据处理
+	vdRepository repository.VDRepository // 虚拟设备信息仓库
 }
 
 // NewVDS 初始化VDS(无设备)
-func NewVDS(inputCh chan message.Message, outputCh chan message.Message, vdRepository repository.VDRepository, sender sender.Sender, address address.Address) *VDS {
+func NewVDS(inputCh chan message.Message, outputCh chan message.Message, vdRepository repository.VDRepository, sender sender.Sender, address connection.Conn) *VDS {
 	vds := &VDS{
 		deviceById:    make(map[string]*virtual_device.VirtualDevice),
+		address:       address,
 		inputCh:       inputCh,
 		outputCh:      outputCh,
 		ingressRouter: router.NewIngressRouter(inputCh, make(map[string]chan<- message.Message)),
-		egressRouter:  router.NewEgressRouter([]<-chan message.Message{}, outputCh),
-		vdRepository:  vdRepository,
+		aggregator:    router.NewAggregator([]<-chan message.Message{}, outputCh),
 		dispatcher:    dispatcher.NewDispatcher(outputCh, vdRepository, sender),
 		sender:        sender,
-		address:       address,
+		vdRepository:  vdRepository,
 	}
 
 	return vds
@@ -54,10 +55,10 @@ func (vds *VDS) RegisterDevice(device *virtual_device.VirtualDevice) {
 	// 本地注册 vd 到设备列表，并加入进站出站路由中
 	vds.deviceById[device.ID] = device
 	vds.ingressRouter.AddOutboundCh(device.ID, device.ReceiveChan())
-	vds.egressRouter.AddIncomingCh(device.SendChan())
+	vds.aggregator.AddIncomingCh(device.SendChan())
 
 	// 调用 vdRepository 把vd注册到registry中
-	err := vds.vdRepository.SetVDAddrById(device.ID, vds.address)
+	err := vds.vdRepository.SetVDConnById(context.Background(), device.ID, vds.address) // 暂时使用默认context， 后续有控制注册vd生命周期再修改
 	if err != nil {
 		log.Println(err)
 		return
@@ -71,6 +72,6 @@ func (vds *VDS) Serve() {
 		go device.Run()
 	}
 	go vds.ingressRouter.Serve()
-	go vds.egressRouter.Serve()
+	go vds.aggregator.Serve()
 	go vds.dispatcher.Serve()
 }

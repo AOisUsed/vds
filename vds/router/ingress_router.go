@@ -5,7 +5,7 @@ import (
 	"virturalDevice/message"
 )
 
-// IngressRouter vds中的入站路由，可以将vds收到的消息发送到对应的虚拟设备中
+// IngressRouter vds中的入口路由，可以将vds收到的消息发送到对应的虚拟设备中
 type IngressRouter struct {
 	inboundCh   <-chan message.Message
 	outboundChs map[string]chan<- message.Message
@@ -40,7 +40,11 @@ func (r *IngressRouter) Route(msg message.Message) {
 	dstId := msg.DstID
 	if r.outboundChs[dstId] != nil {
 		// log.Printf("路由器正在将消息发送至目标ID为%v的设备\n", dstId)
-		r.outboundChs[dstId] <- msg
+		select {
+		case r.outboundChs[dstId] <- msg:
+		default:
+			log.Println("ingressRouter 下游 vd 关闭了消息接收")
+		}
 	} else {
 		log.Printf("路由表内找不到目标ID为%v的设备\n", dstId)
 	}

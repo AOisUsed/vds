@@ -3,7 +3,7 @@ package repository
 
 import (
 	"context"
-	"virturalDevice/vds/address"
+	"virturalDevice/vds/connection"
 	"virturalDevice/vds/virtual_device"
 )
 
@@ -11,6 +11,6 @@ import (
 type VDRepository interface {
 	GetVDStateById(ctx context.Context, id string) (virtual_device.Flag, error) // 根据 ID 查找虚拟设备状态信息
 	GetAllVDStates(ctx context.Context) (map[string]virtual_device.Flag, error) // 找到所有在线设备状态信息
-	GetVDAddrById(ctx context.Context, id string) (address.Address, error)      // 根据 id 查找虚拟设备的地址
-	SetVDAddrById(ctx context.Context, id string, address address.Address) error
+	GetVDConnById(ctx context.Context, id string) (connection.Conn, error)      // 根据 id 查找虚拟设备的地址
+	SetVDConnById(ctx context.Context, id string, address connection.Conn) error
 }

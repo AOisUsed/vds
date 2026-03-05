@@ -38,7 +38,7 @@ func (vd *VirtualDevice) Run() {
 	//log.Printf("正在运行虚拟设备%v\n", vd.ID)
 	for incomingMessage := range vd.receiveCh {
 		// 解密消息
-		bodyDecrypted, err := vd.cipher.Decrypt(incomingMessage.Body)
+		bodyDecrypted, err := vd.cipher.Decrypt(incomingMessage.Payload)
 		if err != nil {
 			log.Printf("%v无法解密收到的消息: %s\n", vd.ID, err)
 			continue
@@ -57,14 +57,14 @@ func (vd *VirtualDevice) Send(dstId string, body []byte) {
 		log.Printf("%v无法加密消息：: %s\n", vd.ID, err)
 	}
 	msg := message.Message{
-		SrcID: vd.ID,
-		DstID: dstId,
-		Body:  bodyEncrypted,
+		SrcID:   vd.ID,
+		DstID:   dstId,
+		Payload: bodyEncrypted,
 	}
 	vd.sendCh <- msg
 }
 
-// Stop 停止虚拟设备
+// Stop 停止虚拟设备，不再发送和接收消息
 func (vd *VirtualDevice) Stop() {
 	close(vd.receiveCh)
 	close(vd.sendCh)
