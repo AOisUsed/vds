@@ -6,7 +6,6 @@ import (
 	"context"
 	"log"
 	"sync"
-	"time"
 	"virturalDevice/message"
 	"virturalDevice/vds/repository"
 	"virturalDevice/vds/sender"
@@ -14,14 +13,14 @@ import (
 
 // Dispatcher 消息分发器
 type Dispatcher struct {
-	incomingCh   <-chan message.Message // 接收来自消息集中器的消息
+	incomingCh   <-chan message.Task // 接收来自消息集中器的消息
 	vdRepository repository.VDRepository
 	sender       sender.Sender
 
 	workerPool *DispatchWorkerPool
 }
 
-func NewDispatcher(incomingCh <-chan message.Message, vdRepository repository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message.Task, vdRepository repository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
 	return &Dispatcher{
 		incomingCh:   incomingCh,
 		vdRepository: vdRepository,
@@ -30,40 +29,35 @@ func NewDispatcher(incomingCh <-chan message.Message, vdRepository repository.VD
 	}
 }
 
-// Serve 运行消息分发器
-func (d *Dispatcher) Serve() { // todo:未完成
-	for i := 0; i < d.workerPool.numWorkers; i++ {
-		go d.worker()
+// Serve 运行消息分发器, 创建工人并开始工作
+func (d *Dispatcher) Serve() {
+	wp := d.workerPool
+	wp.wg.Add(wp.numWorkers)
+	for i := 0; i < wp.numWorkers; i++ {
+		go d.workerPool.worker(wp.wg, d.dispatch)
 	}
+	d.workerPool.wg.Wait()
 }
 
 // Stop 停止消息分发器
 func (d *Dispatcher) Stop() {
 	close(d.workerPool.done)
-}
-
-// worker 实际执行dispatch的worker
-func (d *Dispatcher) worker(ctx context.Context) {
-	for msg := range d.incomingCh {
-		func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-			defer cancel()
-			d.dispatch(ctx, msg)
-		}()
-	}
+	d.workerPool.wg.Wait()
 }
 
 // dispatch 分发消息
-func (d *Dispatcher) dispatch(ctx context.Context, incomingMsg message.Message) {
+func (d *Dispatcher) dispatch(messagingTask message.Task) {
+	ctx := messagingTask.Ctx
+	msg := messagingTask.Message
 	select {
 	case <-ctx.Done():
-		log.Printf("dispatcher context done")
+		log.Printf("%v->%v 消息输送取消", msg.SrcID, msg.DstID)
 		return
 	default:
-		if incomingMsg.DstID != "" {
-			d.dispatchUnicast(ctx, incomingMsg)
+		if msg.DstID != "" {
+			d.dispatchUnicast(ctx, msg)
 		} else {
-			d.dispatchMulticast(ctx, incomingMsg)
+			d.dispatchMulticast(ctx, msg)
 		}
 	}
 }
@@ -89,7 +83,7 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 
 	dstAddr, err := d.vdRepository.GetVDConnById(ctx, msg.DstID)
 	if err != nil {
-		log.Printf("无法获取目标设备 %s 的地址: %v", msg.DstID, err)
+		log.Printf("无法获取目标设备 %s 的连接: %v", msg.DstID, err)
 		return
 	}
 
@@ -100,15 +94,15 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 
 // dispatchUnicast 分发多播消息（消息无明确目标地址的情况）
 func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message) {
+	// 找到所有可达设备
 	dstIDs, err := d.FindValidTargetVDs(ctx, msg.SrcID)
 	if err != nil {
 		log.Printf("无法找到消息来源设备 %s 可联络的设备: %v", msg.SrcID, err)
 		return
 	}
 
-	var wg sync.WaitGroup
-
 	// 并发向所有可达设备发送消息
+	var wg sync.WaitGroup
 	for _, dstID := range dstIDs {
 		wg.Add(1)
 		go func(dstID string) {

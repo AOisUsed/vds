@@ -10,8 +10,8 @@ type VirtualDevice struct {
 	ID         string
 	cipher     cipher.Cipher        // 密码机
 	receiveCh  chan message.Message // 消息接收通道
-	sendCh     chan message.Message // 消息发送通道
-	attributes Flag                 //电台属性
+	sendCh     chan message.Task    // 消息任务发送通道
+	attributes Flag                 // 电台参数
 }
 
 func NewVirtualDevice(id string, cipher cipher.Cipher) *VirtualDevice {
@@ -19,7 +19,7 @@ func NewVirtualDevice(id string, cipher cipher.Cipher) *VirtualDevice {
 		ID:        id,
 		cipher:    cipher,
 		receiveCh: make(chan message.Message),
-		sendCh:    make(chan message.Message),
+		sendCh:    make(chan message.Task),
 	}
 }
 
@@ -29,7 +29,7 @@ func (vd *VirtualDevice) ReceiveChan() chan<- message.Message {
 }
 
 // SendChan 获得该虚拟设备的发送通道
-func (vd *VirtualDevice) SendChan() <-chan message.Message {
+func (vd *VirtualDevice) SendChan() <-chan message.Task {
 	return vd.sendCh
 }
 
