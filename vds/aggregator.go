@@ -7,28 +7,31 @@ import (
 
 // Aggregator vds中消息集合器，聚合消息并发送到分发器
 type Aggregator struct {
-	incomingChs []<-chan message.Task
-	outgoingCh  chan<- message.Task
-	wg          *sync.WaitGroup
+	outgoingCh chan message.Task
+	wg         *sync.WaitGroup
 }
 
-func NewAggregator(incomingCh []<-chan message.Task, outgoingCh chan<- message.Task) *Aggregator {
+func NewAggregator() *Aggregator {
 	return &Aggregator{
-		incomingChs: incomingCh,
-		outgoingCh:  outgoingCh,
+		outgoingCh: make(chan message.Task),
 	}
 }
 
-// AddIncomingCh 添加接收本vds虚拟设备消息的通道
+// AddIncomingCh 添加接收本vds虚拟设备消息的通道,并立刻开始收听消息
 func (a *Aggregator) AddIncomingCh(incomingCh <-chan message.Task) {
-	a.incomingChs = append(a.incomingChs, incomingCh)
+	a.wg.Add(1)
+	go a.aggregateSingle(incomingCh)
 }
 
-// Serve 启动消息集合器服务
-func (a *Aggregator) Serve() {
-	for _, ch := range a.incomingChs {
-		a.wg.Add(1)
-		go a.Aggregate(ch)
+// OutChan 消息出口
+func (a *Aggregator) OutChan() <-chan message.Task {
+	return a.outgoingCh
+}
+
+// Run 启动消息集合器服务(适用于有初始通道需要监听的情况，初始如果没有监听的通道，不需要调用此方法)
+func (a *Aggregator) Run(initialChs []<-chan message.Task) {
+	for _, ch := range initialChs {
+		a.aggregateSingle(ch)
 	}
 }
 
@@ -38,8 +41,8 @@ func (a *Aggregator) Stop() {
 	close(a.outgoingCh)
 }
 
-// Aggregate 接收特定消息渠道的消息，并发送到统一出口，如果消息上游取消了，则取消发送
-func (a *Aggregator) Aggregate(incomingCh <-chan message.Task) {
+// aggregateSingle 接收特定消息渠道的消息，并发送到统一出口，如果消息上游取消了，则取消发送
+func (a *Aggregator) aggregateSingle(incomingCh <-chan message.Task) {
 	defer a.wg.Done()
 	for msgTask := range incomingCh {
 		//log.Printf("出站路由正在将消息转送到统一出口\n")

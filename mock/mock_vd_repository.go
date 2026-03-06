@@ -2,36 +2,36 @@ package mock
 
 import (
 	"context"
-	"virturalDevice/vds/connection"
-	"virturalDevice/vds/repository"
+	"virturalDevice/connection"
+	"virturalDevice/vds"
 	"virturalDevice/vds/virtual_device"
 )
 
 // 测试用模拟vdRepo
-type mockVDRepo struct {
-	addressById map[string]connection.Conn
+type VDRepo struct {
+	addressById map[string]connection.Connection
 }
 
-func (m mockVDRepo) GetVDStateById(ctx context.Context, id string) (virtual_device.Flag, error) {
+func (m VDRepo) GetVDStateById(ctx context.Context, id string) (virtual_device.Flag, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m mockVDRepo) GetAllVDStates(ctx context.Context) (map[string]virtual_device.Flag, error) {
+func (m VDRepo) GetAllVDStates(ctx context.Context) (map[string]virtual_device.Flag, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m mockVDRepo) GetVDConnById(ctx context.Context, id string) (connection.Conn, error) {
+func (m VDRepo) GetVDConnById(ctx context.Context, id string) (connection.Connection, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m mockVDRepo) SetVDConnById(ctx context.Context, id string, address connection.Conn) error {
+func (m VDRepo) SetVDConnById(ctx context.Context, id string, address connection.Connection) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func NewMockVDRepository() repository.VDRepository {
-	return &mockVDRepo{}
+func NewMockVDRepository() vds.VDRepository {
+	return &VDRepo{}
 }

@@ -30,43 +30,43 @@ func TestVDMessage(T *testing.T) {
 	}
 
 	// 创建一些 vds
-	vds1 := vds.NewVDS(make(chan message.Message), make(chan message.Message), vdRegistry)
+	vds1 := vds.NewVDS(make(chan message.Task), make(chan message.Task), vdRegistry)
 	for i := 0; i < 5; i++ {
 		vds1.RegisterDevice(virtualDevices[i])
 	}
 
-	vds2 := vds.NewVDS(make(chan message.Message), make(chan message.Message), vdRegistry)
+	vds2 := vds.NewVDS(make(chan message.Task), make(chan message.Task), vdRegistry)
 	for i := 5; i < 10; i++ {
 		vds2.RegisterDevice(virtualDevices[i])
 	}
 
-	vds3 := vds.NewVDS(make(chan message.Message), make(chan message.Message), vdRegistry)
+	vds3 := vds.NewVDS(make(chan message.Task), make(chan message.Task), vdRegistry)
 	for i := 10; i < 15; i++ {
 		vds3.RegisterDevice(virtualDevices[i])
 	}
 
-	vds4 := vds.NewVDS(make(chan message.Message), make(chan message.Message), vdRegistry)
+	vds4 := vds.NewVDS(make(chan message.Task), make(chan message.Task), vdRegistry)
 	for i := 15; i < 20; i++ {
 		vds4.RegisterDevice(virtualDevices[i])
 	}
 
-	vds5 := vds.NewVDS(make(chan message.Message), make(chan message.Message), vdRegistry)
+	vds5 := vds.NewVDS(make(chan message.Task), make(chan message.Task), vdRegistry)
 	for i := 20; i < 25; i++ {
 		vds5.RegisterDevice(virtualDevices[i])
 	}
 
-	vds6 := vds.NewVDS(make(chan message.Message), make(chan message.Message), vdRegistry)
+	vds6 := vds.NewVDS(make(chan message.Task), make(chan message.Task), vdRegistry)
 	for i := 25; i < 30; i++ {
 		vds6.RegisterDevice(virtualDevices[i])
 	}
 
 	// 运行这些 vds
-	go vds1.Serve()
-	go vds2.Serve()
-	go vds3.Serve()
-	go vds4.Serve()
-	go vds5.Serve()
-	go vds6.Serve()
+	go vds1.Run()
+	go vds2.Run()
+	go vds3.Run()
+	go vds4.Run()
+	go vds5.Run()
+	go vds6.Run()
 
 	// 测试消息的发送与接收
 	for i := 0; i < 5; i++ {

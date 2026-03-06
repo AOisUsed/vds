@@ -1,26 +1,22 @@
-// Package dispatcher
-// 消息分发器负责计算消息可达目标，并发送至对应目标
-package dispatcher
+package vds
 
 import (
 	"context"
 	"log"
 	"sync"
 	"virturalDevice/message"
-	"virturalDevice/vds/repository"
-	"virturalDevice/vds/sender"
 )
 
 // Dispatcher 消息分发器
 type Dispatcher struct {
 	incomingCh   <-chan message.Task // 接收来自消息集中器的消息
-	vdRepository repository.VDRepository
-	sender       sender.Sender
+	vdRepository VDRepository
+	sender       Sender
 
 	workerPool *DispatchWorkerPool
 }
 
-func NewDispatcher(incomingCh <-chan message.Task, vdRepository repository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message.Task, vdRepository VDRepository, sender Sender, numWorkers int) *Dispatcher {
 	return &Dispatcher{
 		incomingCh:   incomingCh,
 		vdRepository: vdRepository,
@@ -29,8 +25,8 @@ func NewDispatcher(incomingCh <-chan message.Task, vdRepository repository.VDRep
 	}
 }
 
-// Serve 运行消息分发器, 创建工人并开始工作
-func (d *Dispatcher) Serve() {
+// Run 运行消息分发器, 创建工人并开始工作
+func (d *Dispatcher) Run() {
 	wp := d.workerPool
 	wp.wg.Add(wp.numWorkers)
 	for i := 0; i < wp.numWorkers; i++ {

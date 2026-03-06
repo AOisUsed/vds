@@ -8,33 +8,23 @@ import (
 
 type VirtualDevice struct {
 	ID         string
-	cipher     cipher.Cipher        // 密码机
-	receiveCh  chan message.Message // 消息接收通道
-	sendCh     chan message.Task    // 消息任务发送通道
-	attributes Flag                 // 电台参数
+	cipher     cipher.Cipher          // 密码机
+	receiveCh  <-chan message.Message // 消息接收通道
+	sendCh     chan message.Task      // 消息任务发送通道
+	attributes Flag                   // 电台参数
 }
 
-func NewVirtualDevice(id string, cipher cipher.Cipher) *VirtualDevice {
+func NewVirtualDevice(id string, cipher cipher.Cipher, receiveCh <-chan message.Message) *VirtualDevice {
 	return &VirtualDevice{
 		ID:        id,
 		cipher:    cipher,
-		receiveCh: make(chan message.Message),
+		receiveCh: receiveCh,
 		sendCh:    make(chan message.Task),
 	}
 }
 
-// ReceiveChan 获得该虚拟设备的接收通道
-func (vd *VirtualDevice) ReceiveChan() chan<- message.Message {
-	return vd.receiveCh
-}
-
-// SendChan 获得该虚拟设备的发送通道
-func (vd *VirtualDevice) SendChan() <-chan message.Task {
-	return vd.sendCh
-}
-
-// Run 运行虚拟设备，接收消息，打印到控制台
-func (vd *VirtualDevice) Run() {
+// Start 运行虚拟设备，接收消息，打印到控制台
+func (vd *VirtualDevice) Start() {
 	//log.Printf("正在运行虚拟设备%v\n", vd.ID)
 	for incomingMessage := range vd.receiveCh {
 		// 解密消息
@@ -56,7 +46,7 @@ func (vd *VirtualDevice) Send(dstId string, body []byte) {
 	if err != nil {
 		log.Printf("%v无法加密消息：: %s\n", vd.ID, err)
 	}
-	msg := message.Message{
+	msg := message.Task{
 		SrcID:   vd.ID,
 		DstID:   dstId,
 		Payload: bodyEncrypted,
@@ -64,8 +54,12 @@ func (vd *VirtualDevice) Send(dstId string, body []byte) {
 	vd.sendCh <- msg
 }
 
+// OutChan 消息出口
+func (vd *VirtualDevice) OutChan() <-chan message.Task {
+	return vd.sendCh
+}
+
 // Stop 停止虚拟设备，不再发送和接收消息
 func (vd *VirtualDevice) Stop() {
-	close(vd.receiveCh)
 	close(vd.sendCh)
 }
