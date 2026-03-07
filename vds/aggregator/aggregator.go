@@ -1,4 +1,4 @@
-package vds
+package aggregator
 
 import (
 	"sync"

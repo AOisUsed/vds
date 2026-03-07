@@ -1,22 +1,24 @@
-package vds
+package dispatcher
 
 import (
 	"context"
 	"log"
 	"sync"
 	"virturalDevice/message"
+	"virturalDevice/vds/sender"
+	"virturalDevice/vds/vdrepository"
 )
 
 // Dispatcher 消息分发器
 type Dispatcher struct {
 	incomingCh   <-chan message.Task // 接收来自消息集中器的消息
-	vdRepository VDRepository
-	sender       Sender
+	vdRepository vdrepository.VDRepository
+	sender       sender.Sender
 
-	workerPool *DispatchWorkerPool
+	workerPool *WorkerPool
 }
 
-func NewDispatcher(incomingCh <-chan message.Task, vdRepository VDRepository, sender Sender, numWorkers int) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
 	return &Dispatcher{
 		incomingCh:   incomingCh,
 		vdRepository: vdRepository,

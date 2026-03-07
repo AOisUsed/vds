@@ -7,39 +7,44 @@ import (
 	"virturalDevice/cipher"
 	"virturalDevice/connection"
 	"virturalDevice/message"
-	"virturalDevice/vds/virtual_device"
+	"virturalDevice/vds/aggregator"
+	"virturalDevice/vds/dispatcher"
+	"virturalDevice/vds/ingressrouter"
+	"virturalDevice/vds/sender"
+	"virturalDevice/vds/vdrepository"
+	"virturalDevice/vds/virtualdevice"
 )
 
 type VDS struct {
 	// 设备
-	vdById map[string]*virtual_device.VirtualDevice // 设备id-实体映射
+	vdById map[string]*virtualdevice.VirtualDevice // 设备id-实体映射
 
 	// vds 消息入口
 	conn       connection.Connection
 	incomingCh chan message.Message
 
 	// 数据处理
-	vdRepository VDRepository // 虚拟设备信息仓库
+	vdRepository vdrepository.VDRepository // 虚拟设备信息仓库
 
 	// 消息处理
-	ingressRouter *IngressRouter // 消息入口路由
-	aggregator    *Aggregator    // 消息集合器
-	dispatcher    *Dispatcher    //消息分发器
-	sender        Sender         //消息出口发送器
+	ingressRouter *ingressrouter.IngressRouter // 消息入口路由
+	aggregator    *aggregator.Aggregator       // 消息集合器
+	dispatcher    *dispatcher.Dispatcher       //消息分发器
+	sender        sender.Sender                //消息出口发送器
 }
 
 // NewVDS 初始化VDS(无设备)
-func NewVDS(conn connection.Connection, repo VDRepository, sender Sender) *VDS {
+func NewVDS(conn connection.Connection, repo vdrepository.VDRepository, sender sender.Sender) *VDS {
 	vds := &VDS{
-		vdById:       make(map[string]*virtual_device.VirtualDevice),
+		vdById:       make(map[string]*virtualdevice.VirtualDevice),
 		conn:         conn,
 		incomingCh:   make(chan message.Message, 100),
 		vdRepository: repo,
 		sender:       sender,
 	}
-	vds.ingressRouter = NewIngressRouter(vds.incomingCh)
-	vds.aggregator = NewAggregator()
-	vds.dispatcher = NewDispatcher(vds.aggregator.OutChan(), vds.vdRepository, sender, runtime.NumCPU()*2)
+	vds.ingressRouter = ingressrouter.NewIngressRouter(vds.incomingCh)
+	vds.aggregator = aggregator.NewAggregator()
+	vds.dispatcher = dispatcher.NewDispatcher(vds.aggregator.OutChan(), vds.vdRepository, sender, runtime.NumCPU()*2)
 	return vds
 }
 
@@ -47,7 +52,7 @@ func NewVDS(conn connection.Connection, repo VDRepository, sender Sender) *VDS {
 func (vds *VDS) RegisterDevice(id string, cipher cipher.Cipher) {
 
 	routerOutCh := vds.ingressRouter.CreateOutboundChByID(id)
-	vd := virtual_device.NewVirtualDevice(id, cipher, routerOutCh)
+	vd := virtualdevice.NewVirtualDevice(id, cipher, routerOutCh)
 	vdOutCh := vd.OutChan()
 	vds.aggregator.AddIncomingCh(vdOutCh)
 
@@ -59,7 +64,7 @@ func (vds *VDS) RegisterDevice(id string, cipher cipher.Cipher) {
 	}
 }
 
-func (vds *VDS) DeregisterDevice(device *virtual_device.VirtualDevice) {
+func (vds *VDS) DeregisterDevice(device *virtualdevice.VirtualDevice) {
 
 }
 

@@ -1,4 +1,4 @@
-package vds
+package controller
 
 type controller struct {
 }

@@ -3,8 +3,8 @@ package mock
 import (
 	"context"
 	"virturalDevice/connection"
-	"virturalDevice/vds"
-	"virturalDevice/vds/virtual_device"
+	"virturalDevice/vds/vdrepository"
+	"virturalDevice/vds/virtualdevice"
 )
 
 // 测试用模拟vdRepo
@@ -12,12 +12,12 @@ type VDRepo struct {
 	addressById map[string]connection.Connection
 }
 
-func (m VDRepo) GetVDStateById(ctx context.Context, id string) (virtual_device.Flag, error) {
+func (m VDRepo) GetVDStateById(ctx context.Context, id string) (virtualdevice.Flag, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m VDRepo) GetAllVDStates(ctx context.Context) (map[string]virtual_device.Flag, error) {
+func (m VDRepo) GetAllVDStates(ctx context.Context) (map[string]virtualdevice.Flag, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -32,6 +32,6 @@ func (m VDRepo) SetVDConnById(ctx context.Context, id string, address connection
 	panic("implement me")
 }
 
-func NewMockVDRepository() vds.VDRepository {
+func NewMockVDRepository() vdrepository.VDRepository {
 	return &VDRepo{}
 }

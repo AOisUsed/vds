@@ -1,20 +1,20 @@
-package vds
+package dispatcher
 
 import (
 	"sync"
 	"virturalDevice/message"
 )
 
-// DispatchWorkerPool 消息分发工作池
-type DispatchWorkerPool struct { // todo:未完成！
+// WorkerPool 消息分发工作池
+type WorkerPool struct { // todo:未完成！
 	incomingTaskCh <-chan message.Task
 	numWorkers     int
 	wg             *sync.WaitGroup
 	done           chan struct{}
 }
 
-func NewDispatchWorkerPool(incomingCh <-chan message.Task, numWorkers int) *DispatchWorkerPool {
-	return &DispatchWorkerPool{
+func NewDispatchWorkerPool(incomingCh <-chan message.Task, numWorkers int) *WorkerPool {
+	return &WorkerPool{
 		incomingTaskCh: incomingCh,
 		numWorkers:     numWorkers,
 		wg:             &sync.WaitGroup{},
@@ -23,7 +23,7 @@ func NewDispatchWorkerPool(incomingCh <-chan message.Task, numWorkers int) *Disp
 }
 
 // worker 实际执行dispatch的工作协程
-func (wp *DispatchWorkerPool) worker(wg *sync.WaitGroup, handler func(task message.Task)) {
+func (wp *WorkerPool) worker(wg *sync.WaitGroup, handler func(task message.Task)) {
 	defer wg.Done()
 
 	for {

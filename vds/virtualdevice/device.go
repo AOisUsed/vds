@@ -1,4 +1,4 @@
-package virtual_device
+package virtualdevice
 
 import (
 	"log"

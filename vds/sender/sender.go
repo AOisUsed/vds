@@ -1,4 +1,4 @@
-package vds
+package sender
 
 import (
 	"virturalDevice/connection"
