@@ -5,7 +5,7 @@ import (
 	"log"
 	"virturalDevice/pkg/cipher"
 	"virturalDevice/pkg/message"
-	"virturalDevice/pkg/vds/attribute"
+	"virturalDevice/pkg/vds/radiomodel"
 )
 
 // VirtualDevice 虚拟通信设备，默认操作是单线程，无并发的
@@ -16,7 +16,7 @@ type VirtualDevice struct {
 	cipher     cipher.Cipher          // 密码机
 	receiveCh  <-chan message.Message // 消息接收通道
 	sendCh     chan message.Task      // 消息任务发送通道
-	attributes attribute.Flag         // 电台参数
+	attributes radiomodel.Params      // 电台参数
 
 	CancelMessaging context.CancelFunc // 取消消息发送函数
 }
