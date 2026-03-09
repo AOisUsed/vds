@@ -29,18 +29,12 @@ func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDR
 
 // Run 运行消息分发器, 创建工人并开始工作
 func (d *Dispatcher) Run() {
-	wp := d.workerPool
-	wp.wg.Add(wp.numWorkers)
-	for i := 0; i < wp.numWorkers; i++ {
-		go d.workerPool.worker(wp.wg, d.dispatch)
-	}
-	d.workerPool.wg.Wait()
+	d.workerPool.Start(d.dispatch)
 }
 
 // Stop 停止消息分发器
 func (d *Dispatcher) Stop() {
-	close(d.workerPool.done)
-	d.workerPool.wg.Wait()
+	d.workerPool.Stop()
 }
 
 // dispatch 分发消息
