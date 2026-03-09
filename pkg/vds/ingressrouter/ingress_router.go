@@ -3,7 +3,7 @@ package ingressrouter
 import (
 	"log"
 	"sync"
-	"virturalDevice/message"
+	"virturalDevice/pkg/message"
 )
 
 // IngressRouter vds中的入口路由，可以将vds收到的消息发送到对应的虚拟设备中
@@ -28,10 +28,11 @@ func (r *IngressRouter) CreateOutboundChByID(id string) <-chan message.Message {
 	return r.outboundChByID[id]
 }
 
-// RemoveOutboundChByID  通过vdID删除消息路由出口通道
+// RemoveOutboundChByID  关闭通道，并通过vdID删除路由信息
 func (r *IngressRouter) RemoveOutboundChByID(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	close(r.outboundChByID[id])
 	delete(r.outboundChByID, id)
 }
 
@@ -52,6 +53,8 @@ func (r *IngressRouter) Run() {
 
 // Route 根据消息中dstID进行路由（简易实现）
 func (r *IngressRouter) Route(msg message.Message) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	dstId := msg.DstID
 	if r.outboundChByID[dstId] != nil {
 		// log.Printf("路由器正在将消息发送至目标ID为%v的设备\n", dstId)

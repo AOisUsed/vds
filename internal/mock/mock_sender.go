@@ -1,8 +1,8 @@
 package mock
 
 import (
-	"virturalDevice/connection"
-	"virturalDevice/message"
+	"virturalDevice/pkg/connection"
+	"virturalDevice/pkg/message"
 )
 
 // 只发送一次，不管错误的sender

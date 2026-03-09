@@ -2,7 +2,7 @@ package dispatcher
 
 import (
 	"sync"
-	"virturalDevice/message"
+	"virturalDevice/pkg/message"
 )
 
 // WorkerPool 消息分发工作池

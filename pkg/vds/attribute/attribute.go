@@ -1,4 +1,4 @@
-package virtualdevice
+package attribute
 
 // 虚拟设备属性
 type Flag struct {

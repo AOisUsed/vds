@@ -2,23 +2,24 @@ package dispatcher
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync"
-	"virturalDevice/message"
-	"virturalDevice/vds/sender"
-	"virturalDevice/vds/vdrepository"
+	message2 "virturalDevice/pkg/message"
+	"virturalDevice/pkg/vds/sender"
+	"virturalDevice/pkg/vds/vdrepository"
 )
 
 // Dispatcher 消息分发器
 type Dispatcher struct {
-	incomingCh   <-chan message.Task // 接收来自消息集中器的消息
+	incomingCh   <-chan message2.Task // 接收来自消息集中器的消息
 	vdRepository vdrepository.VDRepository
 	sender       sender.Sender
 
 	workerPool *WorkerPool
 }
 
-func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message2.Task, vdRepository vdrepository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
 	return &Dispatcher{
 		incomingCh:   incomingCh,
 		vdRepository: vdRepository,
@@ -27,18 +28,19 @@ func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDR
 	}
 }
 
-// Run 运行消息分发器, 创建工人并开始工作
+// Run 运行消息分发器, 创建工人并开始工作 (阻塞)
 func (d *Dispatcher) Run() {
 	d.workerPool.Start(d.dispatch)
+	d.workerPool.Wait()
 }
 
-// Stop 停止消息分发器
+// Stop 停止消息分发器 (注意：强制停止，会使 incomingCh 上游阻塞，)
 func (d *Dispatcher) Stop() {
 	d.workerPool.Stop()
 }
 
 // dispatch 分发消息
-func (d *Dispatcher) dispatch(messagingTask message.Task) {
+func (d *Dispatcher) dispatch(messagingTask message2.Task) {
 	ctx := messagingTask.Ctx
 	msg := messagingTask.Message
 	select {
@@ -55,27 +57,27 @@ func (d *Dispatcher) dispatch(messagingTask message.Task) {
 }
 
 // dispatchUnicast 分发单播消息（消息有明确目标地址的情况）
-func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
+func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message2.Message) {
 	srcState, err := d.vdRepository.GetVDStateById(ctx, msg.SrcID)
-	if err != nil {
-		log.Printf("无法获取消息来源设备 %s 的状态: %v", msg.SrcID, err)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.Printf("无法获取消息来源设备 %s 的状态: %v\n", msg.SrcID, err)
 		return
 	}
 
 	dstState, err := d.vdRepository.GetVDStateById(ctx, msg.DstID)
-	if err != nil {
-		log.Printf("无法获取消息目标设备 %s 的状态: %v", msg.DstID, err)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.Printf("无法获取消息目标设备 %s 的状态: %v\n", msg.DstID, err)
 		return
 	}
 
 	if !srcState.IsCompatibleWith(dstState) {
-		log.Printf("消息来源 %s 设备与 消息目标 %s 设备无法沟通", msg.SrcID, msg.DstID)
+		log.Printf("消息来源 %s 设备与 消息目标 %s 设备无法沟通\n", msg.SrcID, msg.DstID)
 		return
 	}
 
 	dstAddr, err := d.vdRepository.GetVDConnById(ctx, msg.DstID)
-	if err != nil {
-		log.Printf("无法获取目标设备 %s 的连接: %v", msg.DstID, err)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.Printf("无法获取目标设备 %s 的连接: %v\n", msg.DstID, err)
 		return
 	}
 
@@ -85,34 +87,47 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 }
 
 // dispatchUnicast 分发多播消息（消息无明确目标地址的情况）
-func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message) {
+func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message2.Message) {
 	// 找到所有可达设备
 	dstIDs, err := d.FindValidTargetVDs(ctx, msg.SrcID)
-	if err != nil {
-		log.Printf("无法找到消息来源设备 %s 可联络的设备: %v", msg.SrcID, err)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.Printf("无法找到消息来源设备 %s 可联络的设备: %v\n", msg.SrcID, err)
 		return
 	}
 
 	// 并发向所有可达设备发送消息
 	var wg sync.WaitGroup
 	for _, dstID := range dstIDs {
+
+		if ctx.Err() != nil {
+			break // ctx 取消，直接跳出循环，不再启动新的 goroutine
+		}
+
 		wg.Add(1)
 		go func(dstID string) {
 			defer wg.Done()
+
+			// 检查是否 ctx 取消
+			select {
+			case <-ctx.Done():
+				return // 立即退出，不查库也不发送
+			default:
+			}
+
 			dstAddr, err := d.vdRepository.GetVDConnById(ctx, dstID)
-			if err != nil {
-				log.Printf("无法获取多播消息目标设备 %s 的地址: %v", dstID, err)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("无法获取多播消息目标设备 %s 的地址: %v\n", dstID, err)
 				return
 			}
 
-			msgToSend := message.Message{
+			msgToSend := message2.Message{
 				SrcID:   msg.SrcID,
 				DstID:   dstID,
 				Payload: msg.Payload,
 			}
 
-			if err = d.sender.Send(dstAddr, msgToSend); err != nil {
-				log.Printf("无法获取多播消息目标设备 %s 的地址: %v", dstID, err)
+			if err = d.sender.Send(dstAddr, msgToSend); err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("无法获取多播消息目标设备 %s 的地址: %v\n", dstID, err)
 				return
 			}
 		}(dstID)
@@ -125,8 +140,8 @@ func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message)
 func (d *Dispatcher) FindValidTargetVDs(ctx context.Context, srcId string) ([]string, error) {
 	// 1. 获得所有在线设备信息 (包括消息来源设备)
 	onlineVDById, err := d.vdRepository.GetAllVDStates(ctx)
-	if err != nil {
-		log.Println(err)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.Printf("无法获取来源设备 %s 能沟通的设备: %v\n", srcId, err)
 		return nil, err
 	}
 

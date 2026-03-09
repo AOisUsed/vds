@@ -5,16 +5,16 @@ import (
 	"strconv"
 	"testing"
 	"time"
-	"virturalDevice/message"
+	message2 "virturalDevice/pkg/message"
 )
 
 // 测试使用Stop()来停止
 func TestWorkerPoolStop(t *testing.T) {
 	// 任务通道
-	inCh := make(chan message.Task)
+	inCh := make(chan message2.Task)
 
 	// 任务函数
-	handler := func(task message.Task) {
+	handler := func(task message2.Task) {
 		time.Sleep(time.Millisecond * 100)
 		log.Printf("task %v done\n", task.Message.SrcID)
 	}
@@ -22,8 +22,8 @@ func TestWorkerPoolStop(t *testing.T) {
 	// 发送100个任务，并关闭任务通道
 	go func() {
 		for i := 0; i < 100; i++ {
-			inCh <- message.Task{
-				Message: message.Message{
+			inCh <- message2.Task{
+				Message: message2.Message{
 					SrcID: strconv.Itoa(i),
 				},
 			}
@@ -48,10 +48,10 @@ func TestWorkerPoolStop(t *testing.T) {
 
 func TestWorkerPoolWait(t *testing.T) {
 	// 任务通道
-	inCh := make(chan message.Task)
+	inCh := make(chan message2.Task)
 
 	// 任务函数
-	handler := func(task message.Task) {
+	handler := func(task message2.Task) {
 		time.Sleep(time.Millisecond * 100)
 		log.Printf("task %v done\n", task.Message.SrcID)
 	}
@@ -61,8 +61,8 @@ func TestWorkerPoolWait(t *testing.T) {
 	// 发送100个任务，并关闭任务通道
 	go func() {
 		for i := 0; i < 100; i++ {
-			inCh <- message.Task{
-				Message: message.Message{
+			inCh <- message2.Task{
+				Message: message2.Message{
 					SrcID: strconv.Itoa(i),
 				},
 			}
