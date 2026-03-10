@@ -8,7 +8,7 @@ import (
 	"virturalDevice/internal/vds/types"
 )
 
-// VirtualDevice 虚拟通信设备，默认操作是单线程，无并发的
+// VirtualDevice 虚拟通信设备，默认操作是单线程，并发不安全
 type VirtualDevice struct {
 	ID        string
 	cipher    cipher.Cipher          // 密码机

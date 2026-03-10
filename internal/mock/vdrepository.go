@@ -12,6 +12,11 @@ type Repository struct {
 	addressById map[string]connection.Connection
 }
 
+func (repo *Repository) RemoveVDConnById(ctx context.context.Context, id string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewVDRepository() vdrepository.VDRepository {
 	return &Repository{}
 }

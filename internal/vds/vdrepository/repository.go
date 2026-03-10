@@ -8,8 +8,10 @@ import (
 
 // VDRepository 虚拟设备相关数据仓库接口
 type VDRepository interface {
-	GetVDStateById(ctx context.Context, id string) (types.VDParams, error)       // 根据 ID 查找虚拟设备状态信息
-	GetAllVDStates(ctx context.Context) (map[string]types.VDParams, error)       // 找到所有在线设备状态信息
-	GetVDConnById(ctx context.Context, id string) (connection.Connection, error) // 根据 id 查找虚拟设备的地址
-	SetVDConnById(ctx context.Context, id string, address connection.Connection) error
+	GetVDStateById(ctx context.Context, id string) (types.VDParams, error) // 根据 ID 查找虚拟设备状态信息
+	GetAllVDStates(ctx context.Context) (map[string]types.VDParams, error) // 找到所有在线设备状态信息
+
+	GetVDConnById(ctx context.Context, id string) (connection.Connection, error)       // 根据 id 查找虚拟设备的连接信息
+	SetVDConnById(ctx context.Context, id string, address connection.Connection) error // 根据 id 设置虚拟设备的连接信息
+	RemoveVDConnById(ctx context.Context, id string) error                             // 根据 id 删除虚拟设备的连接信息
 }

@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 	"virturalDevice/internal/message"
+	"virturalDevice/internal/vds/codec"
 	"virturalDevice/internal/vds/sender"
 	"virturalDevice/internal/vds/vdrepository"
 )
@@ -14,15 +15,17 @@ import (
 type Dispatcher struct {
 	incomingCh   <-chan message.Task // 接收来自消息集中器的消息
 	vdRepository vdrepository.VDRepository
+	codec        codec.Codec
 	sender       sender.Sender
 
 	workerPool *WorkerPool
 }
 
-func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDRepository, codec codec.Codec, sender sender.Sender, numWorkers int) *Dispatcher {
 	return &Dispatcher{
 		incomingCh:   incomingCh,
 		vdRepository: vdRepository,
+		codec:        codec,
 		sender:       sender,
 		workerPool:   NewDispatchWorkerPool(incomingCh, numWorkers),
 	}
@@ -81,7 +84,12 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 		return
 	}
 
-	if err = d.sender.Send(dstAddr, msg); err != nil {
+	data, err := d.codec.Encode(msg)
+	if err != nil {
+		log.Printf("无法序列化消息:%v \n", err)
+	}
+
+	if err = d.sender.Send(dstAddr, data); err != nil {
 		log.Printf("无法给 %s 发送消息: %v", msg.DstID, err)
 	}
 }
@@ -126,7 +134,12 @@ func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message)
 				Payload: msg.Payload,
 			}
 
-			if err = d.sender.Send(dstAddr, msgToSend); err != nil && !errors.Is(err, context.Canceled) {
+			data, err := d.codec.Encode(msgToSend)
+			if err != nil {
+				log.Printf("无法序列化消息:%v \n", err)
+			}
+
+			if err = d.sender.Send(dstAddr, data); err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("无法获取多播消息目标设备 %s 的地址: %v\n", dstID, err)
 				return
 			}

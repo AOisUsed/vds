@@ -11,24 +11,26 @@ type IngressRouter struct {
 	inboundCh      <-chan message.Message
 	outboundChByID map[string]chan message.Message
 	mu             sync.Mutex
+	stop           chan struct{}
 }
 
 func NewIngressRouter(inboundCh <-chan message.Message) *IngressRouter {
 	return &IngressRouter{
 		inboundCh:      inboundCh,
 		outboundChByID: make(map[string]chan message.Message),
+		stop:           make(chan struct{}),
 	}
 }
 
-// CreateOutboundChByID  通过vdID添加消息路由出口通道
+// CreateOutboundChByID  通过ID添加消息路由出口通道
 func (r *IngressRouter) CreateOutboundChByID(id string) <-chan message.Message {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.outboundChByID[id] = make(chan message.Message, 100) //设置大小为100的缓冲，应对下游无法接收消息的情况
+	r.outboundChByID[id] = make(chan message.Message, 100) //设置大小为100的缓冲，应对下游暂时无法接收消息的情况
 	return r.outboundChByID[id]
 }
 
-// RemoveOutboundChByID  关闭通道，并通过vdID删除路由信息
+// RemoveOutboundChByID  关闭通道，并通过ID删除路由信息
 func (r *IngressRouter) RemoveOutboundChByID(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -46,8 +48,27 @@ func (r *IngressRouter) OutChByID(id string) <-chan message.Message {
 // Run 启动入站路由
 func (r *IngressRouter) Run() {
 	//log.Println("正在启动入站路由")
-	for msg := range r.inboundCh {
-		r.Route(msg)
+	for {
+		select {
+		case <-r.stop:
+			return
+		case msg, ok := <-r.inboundCh:
+			if !ok {
+				return
+			}
+			r.Route(msg)
+		}
+	}
+}
+
+// Stop 停止路由
+func (r *IngressRouter) Stop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	close(r.stop)
+	for id, ch := range r.outboundChByID {
+		close(ch)
+		delete(r.outboundChByID, id)
 	}
 }
 
