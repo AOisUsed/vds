@@ -5,21 +5,21 @@ import (
 	"errors"
 	"log"
 	"sync"
-	message2 "virturalDevice/pkg/message"
-	"virturalDevice/pkg/vds/sender"
-	"virturalDevice/pkg/vds/vdrepository"
+	"virturalDevice/internal/message"
+	"virturalDevice/internal/vds/sender"
+	"virturalDevice/internal/vds/vdrepository"
 )
 
 // Dispatcher 消息分发器
 type Dispatcher struct {
-	incomingCh   <-chan message2.Task // 接收来自消息集中器的消息
+	incomingCh   <-chan message.Task // 接收来自消息集中器的消息
 	vdRepository vdrepository.VDRepository
 	sender       sender.Sender
 
 	workerPool *WorkerPool
 }
 
-func NewDispatcher(incomingCh <-chan message2.Task, vdRepository vdrepository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDRepository, sender sender.Sender, numWorkers int) *Dispatcher {
 	return &Dispatcher{
 		incomingCh:   incomingCh,
 		vdRepository: vdRepository,
@@ -40,7 +40,7 @@ func (d *Dispatcher) Stop() {
 }
 
 // dispatch 分发消息
-func (d *Dispatcher) dispatch(messagingTask message2.Task) {
+func (d *Dispatcher) dispatch(messagingTask message.Task) {
 	ctx := messagingTask.Ctx
 	msg := messagingTask.Message
 	select {
@@ -57,7 +57,7 @@ func (d *Dispatcher) dispatch(messagingTask message2.Task) {
 }
 
 // dispatchUnicast 分发单播消息（消息有明确目标地址的情况）
-func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message2.Message) {
+func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 	srcState, err := d.vdRepository.GetVDStateById(ctx, msg.SrcID)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取消息来源设备 %s 的状态: %v\n", msg.SrcID, err)
@@ -87,7 +87,7 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message2.Message) 
 }
 
 // dispatchUnicast 分发多播消息（消息无明确目标地址的情况）
-func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message2.Message) {
+func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message) {
 	// 找到所有可达设备
 	dstIDs, err := d.FindValidTargetVDs(ctx, msg.SrcID)
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -120,7 +120,7 @@ func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message2.Message
 				return
 			}
 
-			msgToSend := message2.Message{
+			msgToSend := message.Message{
 				SrcID:   msg.SrcID,
 				DstID:   dstID,
 				Payload: msg.Payload,

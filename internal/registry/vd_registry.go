@@ -3,7 +3,7 @@
 package registry
 
 import (
-	"virturalDevice/pkg/message"
+	"virturalDevice/internal/message"
 )
 
 type VDRegistry struct {

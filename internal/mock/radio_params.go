@@ -1,6 +1,8 @@
 package mock
 
-import "virturalDevice/pkg/vds/radiomodel"
+import (
+	"virturalDevice/internal/vds/types"
+)
 
 type RadioParams struct {
 	Mode       int
@@ -8,7 +10,35 @@ type RadioParams struct {
 	CryptoMode int
 }
 
-func (p *RadioParams) IsCompatibleWith(other radiomodel.Params) bool {
+type Options func(*RadioParams)
+
+func (p *RadioParams) WithMode(mode int) Options {
+	return func(p *RadioParams) {
+		p.Mode = mode
+	}
+}
+
+func (p *RadioParams) WithIsOn(isOn bool) Options {
+	return func(p *RadioParams) {
+		p.IsOn = isOn
+	}
+}
+func (p *RadioParams) WithCryptoMode(cryptoMode int) Options {
+	return func(p *RadioParams) {
+		p.CryptoMode = cryptoMode
+	}
+}
+
+func NewRadioParams(ops ...Options) *RadioParams {
+	p := &RadioParams{}
+
+	for _, op := range ops {
+		op(p)
+	}
+	return p
+}
+
+func (p *RadioParams) IsCompatibleWith(other types.VDParams) bool {
 	otherP, ok := other.(*RadioParams)
 	if !ok {
 		return false

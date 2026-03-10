@@ -3,7 +3,7 @@ package ingressrouter
 import (
 	"log"
 	"sync"
-	"virturalDevice/pkg/message"
+	"virturalDevice/internal/message"
 )
 
 // IngressRouter vds中的入口路由，可以将vds收到的消息发送到对应的虚拟设备中
@@ -62,7 +62,6 @@ func (r *IngressRouter) Route(msg message.Message) {
 		case r.outboundChByID[dstId] <- msg:
 		default:
 			log.Printf("%v 设备消息接收通道阻塞, 消息被丢弃\n", dstId)
-			//todo: 可能需要考虑更好的处理方法。但vd,ingressRouter生命周期由vds管理，正常情况不会出现丢弃消息。
 		}
 	} else {
 		log.Printf("本地找不到目标ID为%v的设备\n", dstId)

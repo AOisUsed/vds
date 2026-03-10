@@ -3,7 +3,7 @@ package mock
 type Cipher struct {
 }
 
-func NewMockCipher() *Cipher {
+func NewCipher() *Cipher {
 	return &Cipher{}
 }
 

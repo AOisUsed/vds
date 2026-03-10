@@ -6,15 +6,15 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"virturalDevice/internal/message"
 	"virturalDevice/internal/mock"
-	"virturalDevice/pkg/message"
 )
 
 func TestDeviceSend(t *testing.T) {
 
 	inCh := make(chan message.Message)
-	ciph := mock.NewMockCipher()
-	dv := NewVirtualDevice("1", ciph, inCh)
+	ciph := mock.NewCipher()
+	dv := NewVirtualDevice("1", ciph, inCh, mock.NewRadioParams())
 
 	outCh := dv.OutChan()
 
@@ -22,6 +22,7 @@ func TestDeviceSend(t *testing.T) {
 
 	// 消费者
 	go func() {
+		wg.Add(1)
 		defer wg.Done()
 		for msg := range outCh {
 			//time.Sleep(time.Second)
@@ -34,15 +35,16 @@ func TestDeviceSend(t *testing.T) {
 	dv.Send("4", []byte("!!"))
 	//dv.CancelSend()
 
-	dv.StopSend()
+	time.Sleep(3 * time.Second)
+	dv.Stop()
 	wg.Wait()
 }
 
 func TestDeviceReceive(t *testing.T) {
 
 	inCh := make(chan message.Message)
-	ciph := mock.NewMockCipher()
-	dv := NewVirtualDevice("1", ciph, inCh)
+	ciph := mock.NewCipher()
+	dv := NewVirtualDevice("1", ciph, inCh, mock.NewRadioParams())
 	go dv.Run()
 
 	for i := 0; i < 10; i++ {
