@@ -58,6 +58,14 @@ func NewVDS(conn connection.Connection, repo vdrepository.VDRepository, sender s
 	return vds
 }
 
+func (vds *VDS) DeviceByID(id string) *virtualdevice.VirtualDevice {
+	v, ok := vds.vdById[id]
+	if !ok {
+		return nil
+	}
+	return v
+}
+
 // readerLoop 持续从连接读取数据
 func (vds *VDS) readerLoop() {
 	defer close(vds.incomingCh)
@@ -83,55 +91,63 @@ func (vds *VDS) readerLoop() {
 	}
 }
 
-// RegisterDevice 注册并运行vd (并发安全，可在vds运行中随时调用) 注：如果同id的设备已经存在，会覆盖原设备
-func (vds *VDS) RegisterDevice(ctx context.Context, id string, opts ...virtualdevice.Option) error {
+// RegisterDeviceConn 注册数据库中vd连接信息并创建，运行vd (并发安全，可在vds运行中随时调用) 注：如果同id的设备已经存在，会覆盖原设备
+func (vds *VDS) RegisterDeviceConn(ctx context.Context, id string, opts ...virtualdevice.Option) error {
 	vds.mu.Lock()
 	defer vds.mu.Unlock()
 
 	// 创建并运行 vd
-	vds.addDeviceUnsafe(id, opts...)
+	vds.connectDeviceUnsafe(id, opts...)
 	// 调用 vdRepository 把vd注册到registry中
 	err := vds.vdRepository.SetVDConnById(ctx, id, vds.conn)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			log.Printf("注册设备取消：%v\n", err)
+			log.Printf("注册设备%v连接信息取消：%v\n", id, err)
 		} else {
-			log.Printf("注册设备失败：%v\n", err)
+			log.Printf("注册设备%v连接信息失败：%v\n", id, err)
 		}
 		// 失败，回滚删除本地设备
-		vds.removeDeviceUnsafe(id)
+		vds.disconnectDeviceUnsafe(id)
 		return err
 	}
-	return err
+	log.Printf("注册设备%v连接信息成功\n", id)
+	return nil
 }
 
-// DeregisterDevice 停止并删除vd连接信息 (并发安全，可在vds运行中随时调用)
-func (vds *VDS) DeregisterDevice(ctx context.Context, id string) error {
+// DeregisterDeviceConn 停止，断开vd设备，并删除数据库中vd连接信息 (并发安全，可在vds运行中随时调用) 注：删除不存在的设备不会返回error
+func (vds *VDS) DeregisterDeviceConn(ctx context.Context, id string) error {
 	vds.mu.Lock()
 	defer vds.mu.Unlock()
 
 	err := vds.vdRepository.RemoveVDConnById(ctx, id)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			log.Printf("删除设备注册信息取消：%v\n", err)
+			log.Printf("删除设备%v连接信息取消：%v\n", id, err)
 		} else {
-			log.Printf("删除设备注册信息失败：%v\n", err)
+			log.Printf("删除设备%v连接信息失败：%v\n", id, err)
 		}
 		return err
 	}
-	vds.removeDeviceUnsafe(id)
+	log.Printf("删除设备%v连接信息成功\n", id)
+	vds.disconnectDeviceUnsafe(id)
 	return err
 }
+
+//
+//func (vds *VDS) UpdateDeviceParams(ctx context.Context, id string) error{
+//	vds.mu.Lock()
+//	defer vds.mu.Unlock()
+//}
 
 // LoadDevices 从repository载入并运行设备
 //func (vds *VDS) LoadDevices(ctx context.Context) error {
 //
 //}
 
-// addDeviceUnsafe vds中创建设备，与前后消息通道连接，并运行设备，如果同id的设备存在会删除原设备 (非并发安全)
-func (vds *VDS) addDeviceUnsafe(id string, opts ...virtualdevice.Option) {
+// connectDeviceUnsafe vds中创建设备，与前后消息通道连接，并运行设备，如果同id的设备存在会删除原设备 (非并发安全)
+func (vds *VDS) connectDeviceUnsafe(id string, opts ...virtualdevice.Option) {
 	if _, exists := vds.vdById[id]; exists {
-		vds.removeDeviceUnsafe(id)
+		vds.disconnectDeviceUnsafe(id)
 	}
 	routerOutCh := vds.ingressRouter.CreateOutboundChByID(id)
 	vd := virtualdevice.NewVirtualDevice(id, routerOutCh, opts...)
@@ -141,8 +157,8 @@ func (vds *VDS) addDeviceUnsafe(id string, opts ...virtualdevice.Option) {
 	vds.vdById[id] = vd
 }
 
-// removeDeviceUnsafe vds中停止并移除设备和设备与其前后消息通常连接 (非并发安全)
-func (vds *VDS) removeDeviceUnsafe(id string) {
+// disconnectDeviceUnsafe vds中停止并移除设备和设备与其前后消息通常连接 (非并发安全)
+func (vds *VDS) disconnectDeviceUnsafe(id string) {
 	if _, exists := vds.vdById[id]; !exists {
 		return
 	}

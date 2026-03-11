@@ -45,7 +45,7 @@ func (r *IngressRouter) OutChByID(id string) <-chan message.Message {
 	return r.outboundChByID[id]
 }
 
-// Run 启动入站路由
+// Run 运行入站路由
 func (r *IngressRouter) Run() {
 	log.Println("正在启动 ingress router")
 	for {
@@ -61,7 +61,7 @@ func (r *IngressRouter) Run() {
 	}
 }
 
-// Stop 停止路由
+// Stop 停止路由 (强制停止，会使上游发送通道阻塞)
 func (r *IngressRouter) Stop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()

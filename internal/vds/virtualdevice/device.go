@@ -5,6 +5,7 @@ import (
 	"log"
 	"virturalDevice/internal/cipher"
 	"virturalDevice/internal/message"
+	"virturalDevice/internal/mock"
 	"virturalDevice/internal/vds/types"
 )
 
@@ -17,7 +18,7 @@ type VirtualDevice struct {
 	params    types.VDParams         // 设备参数
 
 	cancelMessaging context.CancelFunc // 取消消息发送函数
-	stop            chan struct{}      // 停止工作
+	stop            chan struct{}      // 停止工作信号通道
 }
 
 type Option func(*VirtualDevice)
@@ -38,8 +39,11 @@ func NewVirtualDevice(id string, receiveCh <-chan message.Message, opts ...Optio
 	vd := &VirtualDevice{
 		ID:        id,
 		receiveCh: receiveCh,
-		sendCh:    make(chan message.Task, 50),
+		sendCh:    make(chan message.Task, 50), // 缓存大小可以根据实际情况调整，暂时设为50
 		stop:      make(chan struct{}),
+
+		params: mock.NewRadioParams(), // ！！注意：仅模拟时临时使用
+		cipher: mock.NewCipher(),      // ！！注意：仅模拟时临时使用
 	}
 
 	for _, opt := range opts {
@@ -56,15 +60,16 @@ func (vd *VirtualDevice) OutChan() <-chan message.Task {
 
 // Run 运行虚拟设备，接收消息，打印到控制台，生命周期由上游关闭通道结束
 func (vd *VirtualDevice) Run() {
-	//log.Printf("正在运行虚拟设备%v\n", vd.ID)
+	log.Printf("开始运行设备%v\n", vd.ID)
+	defer log.Printf("设备%v停止运行\n", vd.ID)
 
 	for {
 		select {
 		case <-vd.stop:
-			break
+			return
 		case incomingMessage, ok := <-vd.receiveCh:
 			if !ok {
-				break
+				return
 			}
 			// 解密消息
 			bodyDecrypted, err := vd.cipher.Decrypt(incomingMessage.Payload)
@@ -83,7 +88,7 @@ func (vd *VirtualDevice) Send(dstId string, body []byte) {
 	log.Printf("虚拟设备 %v 正在发送消息给%v\n", vd.ID, dstId)
 	bodyEncrypted, err := vd.cipher.Encrypt(body)
 	if err != nil {
-		log.Printf("%v无法加密消息：: %s\n", vd.ID, err)
+		log.Printf("%v无法加密消息: %s\n", vd.ID, err)
 	}
 	msg := message.Message{
 		SrcID:   vd.ID,

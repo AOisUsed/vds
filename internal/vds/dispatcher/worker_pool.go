@@ -49,18 +49,19 @@ func (wp *WorkerPool) Start(handler func(task message.Task)) {
 // Wait 等待所有worker完成任务再退出，在主线程中调用以防止worker协程未结束任务就因主线程退出被杀死
 // 使用方法：
 //
-//	func main (){
-//	   wp.Start()
-//	   // ... 一些操作
-//	   wp.Wait() // <- 不能用goroutine执行，要在主线程执行
-//	}
+//		func main (){
+//	    // ... 一些初始化
+//		   wp.Start()
+//		   // ... 一些操作
+//		   wp.Wait() // <- 不能用goroutine执行，要在主线程执行
+//		}
 func (wp *WorkerPool) Wait() {
 	wp.wg.Wait()
 }
 
 // Stop 通知所有worker完成当前任务后停止工作（无论上游是否还有持续的任务发送）
 //
-// 注意：调用Stop()会使上游任务发送通道阻塞, 且Stop()后不可用Start()恢复使用此工作池.
+// 注意：调用Stop()会使上游任务发送通道阻塞, 且Stop()后不可用Start()复用此工作池.
 // 如果需要继续任务，创建新的工作池
 func (wp *WorkerPool) Stop() {
 	close(wp.done)

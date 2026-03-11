@@ -30,12 +30,17 @@ func (p *RadioParams) WithCryptoMode(cryptoMode int) Options {
 }
 
 func NewRadioParams(ops ...Options) *RadioParams {
-	p := &RadioParams{}
+
+	var p = RadioParams{
+		Mode:       0,
+		IsOn:       false,
+		CryptoMode: 0,
+	}
 
 	for _, op := range ops {
-		op(p)
+		op(&p)
 	}
-	return p
+	return &p
 }
 
 func (p *RadioParams) IsCompatibleWith(other types.VDParams) bool {

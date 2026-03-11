@@ -3,6 +3,7 @@ package mock
 import (
 	"errors"
 	"io"
+	"time"
 )
 
 type Conn struct {
@@ -19,9 +20,10 @@ func (c *Conn) Send(data []byte) error {
 	select {
 	case c.dataCh <- data:
 		return nil
-	default:
+	case <-time.After(time.Millisecond * 300):
 		return errors.New("连接阻塞无法发送消息")
 	}
+
 }
 
 func (c *Conn) Receive() ([]byte, error) {

@@ -39,6 +39,7 @@ func (a *Aggregator) Stop() {
 // aggregateSingle 接收特定消息渠道的消息，并发送到统一出口，如果上游通道关闭，则停止监听
 func (a *Aggregator) aggregateSingle(incomingCh <-chan message.Task) {
 	defer a.wg.Done()
+	log.Println("aggregator 开始监听此通道")
 	for msgTask := range incomingCh {
 		//log.Printf("出站路由正在将消息转送到统一出口\n")
 		select {
@@ -47,4 +48,5 @@ func (a *Aggregator) aggregateSingle(incomingCh <-chan message.Task) {
 		case a.outgoingCh <- msgTask:
 		}
 	}
+	log.Println("aggregator 停止监听此通道")
 }
