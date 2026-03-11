@@ -3,7 +3,6 @@ package dispatcher
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"virturalDevice/internal/message"
@@ -68,17 +67,11 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取消息来源设备 %s 的状态: %v\n", msg.SrcID, err)
 		return
-	} else if srcParams == nil {
-		log.Printf("数据库中不存在消息来源设备 %s 的状态: %v\n", msg.SrcID, err)
-		return
 	}
 
 	dstParams, err := d.vdRepository.GetVDParamsById(ctx, msg.DstID)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取消息目标设备 %s 的状态: %v\n", msg.DstID, err)
-		return
-	} else if dstParams == nil {
-		log.Printf("数据库中不存在消息目标设备 %s 的状态: %v\n", msg.DstID, err)
 		return
 	}
 
@@ -90,9 +83,6 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 	dstConn, err := d.vdRepository.GetVDConnById(ctx, msg.DstID)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取目标设备 %s 的连接: %v\n", msg.DstID, err)
-		return
-	} else if dstConn == nil {
-		log.Printf("数据库中不存在目标设备 %s 的连接信息: %v\n", msg.DstID, err)
 		return
 	}
 
@@ -138,9 +128,6 @@ func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message)
 			if err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("无法获取多播消息目标设备 %s 的连接信息: %v\n", dstID, err)
 				return
-			} else if dstConn == nil {
-				log.Printf("数据库中没有多播消息目标设备 %s 的连接信息: %v\n", dstID, err)
-				return
 			}
 
 			msgToSend := message.Message{
@@ -175,10 +162,7 @@ func (d *Dispatcher) FindValidTargetVDs(ctx context.Context, srcId string) ([]st
 
 	// 2. 计算得到可达设备id
 	var validTargetVDs []string
-	srcParams, ok := onlineVDById[srcId]
-	if !ok {
-		return validTargetVDs, errors.New(fmt.Sprintf("消息来源设备%v参数不在数据库中", srcId))
-	}
+	srcParams := onlineVDById[srcId]
 
 	for id, Params := range onlineVDById {
 		if id == srcId {

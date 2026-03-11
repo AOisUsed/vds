@@ -54,6 +54,9 @@ func (repo *Repository) GetAllVDParams(ctx context.Context) (map[string]types.VD
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(repo.simulatedLatency):
+		if len(repo.vdParamsByID) <= 0 {
+			return nil, errors.New("数据库为空")
+		}
 		return repo.vdParamsByID, nil
 	}
 }
@@ -63,7 +66,10 @@ func (repo *Repository) GetVDConnById(ctx context.Context, id string) (connectio
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(repo.simulatedLatency):
-		return repo.connById[id], nil
+		if val, ok := repo.connById[id]; ok {
+			return val, nil
+		}
+		return nil, errors.New(fmt.Sprintf("不存在设备%v的连接", id))
 	}
 }
 
