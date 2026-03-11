@@ -5,10 +5,13 @@ import (
 )
 
 // 只发送一次，不管错误的sender
-type Sender struct {
+type Sender struct{}
+
+func NewSender() *Sender {
+	return new(Sender)
 }
 
 func (ms *Sender) Send(dst connection.Connection, data []byte) error {
-	//TODO implement me
-	panic("implement me")
+	err := dst.Send(data)
+	return err
 }

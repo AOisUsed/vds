@@ -47,7 +47,7 @@ func (r *IngressRouter) OutChByID(id string) <-chan message.Message {
 
 // Run 启动入站路由
 func (r *IngressRouter) Run() {
-	//log.Println("正在启动入站路由")
+	log.Println("正在启动 ingress router")
 	for {
 		select {
 		case <-r.stop:
@@ -70,6 +70,7 @@ func (r *IngressRouter) Stop() {
 		close(ch)
 		delete(r.outboundChByID, id)
 	}
+	log.Println("ingress router 停止")
 }
 
 // Route 根据消息中dstID进行路由（简易实现）

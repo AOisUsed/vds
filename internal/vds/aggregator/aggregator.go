@@ -1,6 +1,7 @@
 package aggregator
 
 import (
+	"log"
 	"sync"
 	"virturalDevice/internal/message"
 )
@@ -32,6 +33,7 @@ func (a *Aggregator) OutChan() <-chan message.Task {
 func (a *Aggregator) Stop() {
 	a.wg.Wait()
 	close(a.outgoingCh)
+	log.Println("aggregator 停止")
 }
 
 // aggregateSingle 接收特定消息渠道的消息，并发送到统一出口，如果上游通道关闭，则停止监听

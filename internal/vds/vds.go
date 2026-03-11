@@ -3,10 +3,11 @@ package vds
 import (
 	"context"
 	"errors"
+	"io"
 	"log"
 	"runtime"
 	"sync"
-	"virturalDevice/internal/cipher"
+	"time"
 	"virturalDevice/internal/connection"
 	"virturalDevice/internal/message"
 	"virturalDevice/internal/vds/aggregator"
@@ -14,7 +15,6 @@ import (
 	"virturalDevice/internal/vds/dispatcher"
 	"virturalDevice/internal/vds/ingressrouter"
 	"virturalDevice/internal/vds/sender"
-	"virturalDevice/internal/vds/types"
 	"virturalDevice/internal/vds/vdrepository"
 	"virturalDevice/internal/vds/virtualdevice"
 )
@@ -39,8 +39,7 @@ type VDS struct {
 	// 编解码器
 	codec codec.Codec
 
-	stop chan struct{}
-	mu   sync.Mutex
+	mu sync.Mutex
 }
 
 // NewVDS 初始化VDS(无设备)
@@ -52,7 +51,6 @@ func NewVDS(conn connection.Connection, repo vdrepository.VDRepository, sender s
 		vdRepository: repo,
 		sender:       sender,
 		codec:        codec,
-		stop:         make(chan struct{}),
 	}
 	vds.ingressRouter = ingressrouter.NewIngressRouter(vds.incomingCh)
 	vds.aggregator = aggregator.NewAggregator()
@@ -60,13 +58,20 @@ func NewVDS(conn connection.Connection, repo vdrepository.VDRepository, sender s
 	return vds
 }
 
-// readerLoop 持续从连接读取数据 todo:需要解决生命周期的问题
+// readerLoop 持续从连接读取数据
 func (vds *VDS) readerLoop() {
 	defer close(vds.incomingCh)
+
 	for {
 		data, err := vds.conn.Receive()
 		if err != nil {
-			log.Printf("无法从连接读取数据:%v \n", err)
+			if err != io.EOF {
+				log.Printf("无法从连接读取数据:%v \n", err)
+
+				time.Sleep(3 * time.Second) // 出现EOF外其他error后, 5秒后再重新尝试读数据
+				continue
+			}
+			log.Printf("连接关闭，退出 reader loop. \n")
 			return
 		}
 		msg, err := vds.codec.Decode(data)
@@ -78,13 +83,13 @@ func (vds *VDS) readerLoop() {
 	}
 }
 
-// RegisterDevice 注册并运行vd (可在vds运行中随时调用) 注：如果同id的设备已经存在，会覆盖原设备
-func (vds *VDS) RegisterDevice(ctx context.Context, id string, cipher cipher.Cipher, params types.VDParams) error {
+// RegisterDevice 注册并运行vd (并发安全，可在vds运行中随时调用) 注：如果同id的设备已经存在，会覆盖原设备
+func (vds *VDS) RegisterDevice(ctx context.Context, id string, opts ...virtualdevice.Option) error {
 	vds.mu.Lock()
 	defer vds.mu.Unlock()
 
 	// 创建并运行 vd
-	vds.addDeviceUnsafe(id, cipher, params)
+	vds.addDeviceUnsafe(id, opts...)
 	// 调用 vdRepository 把vd注册到registry中
 	err := vds.vdRepository.SetVDConnById(ctx, id, vds.conn)
 	if err != nil {
@@ -100,7 +105,7 @@ func (vds *VDS) RegisterDevice(ctx context.Context, id string, cipher cipher.Cip
 	return err
 }
 
-// DeregisterDevice 停止并删除vd连接信息 (可在vds运行中随时调用)
+// DeregisterDevice 停止并删除vd连接信息 (并发安全，可在vds运行中随时调用)
 func (vds *VDS) DeregisterDevice(ctx context.Context, id string) error {
 	vds.mu.Lock()
 	defer vds.mu.Unlock()
@@ -123,20 +128,20 @@ func (vds *VDS) DeregisterDevice(ctx context.Context, id string) error {
 //
 //}
 
-// addDeviceUnsafe vds内存中添加并运行设备，如果同id的设备存在会删除原设备 (非并发安全)
-func (vds *VDS) addDeviceUnsafe(id string, cipher cipher.Cipher, params types.VDParams) {
+// addDeviceUnsafe vds中创建设备，与前后消息通道连接，并运行设备，如果同id的设备存在会删除原设备 (非并发安全)
+func (vds *VDS) addDeviceUnsafe(id string, opts ...virtualdevice.Option) {
 	if _, exists := vds.vdById[id]; exists {
 		vds.removeDeviceUnsafe(id)
 	}
 	routerOutCh := vds.ingressRouter.CreateOutboundChByID(id)
-	vd := virtualdevice.NewVirtualDevice(id, cipher, routerOutCh, params)
+	vd := virtualdevice.NewVirtualDevice(id, routerOutCh, opts...)
 	vdOutCh := vd.OutChan()
 	vds.aggregator.Watch(vdOutCh)
 	go vd.Run()
 	vds.vdById[id] = vd
 }
 
-// removeDeviceUnsafe vds内存中停止并移除设备 (非并发安全)
+// removeDeviceUnsafe vds中停止并移除设备和设备与其前后消息通常连接 (非并发安全)
 func (vds *VDS) removeDeviceUnsafe(id string) {
 	if _, exists := vds.vdById[id]; !exists {
 		return
@@ -146,8 +151,9 @@ func (vds *VDS) removeDeviceUnsafe(id string) {
 	delete(vds.vdById, id)
 }
 
-// Run 启动vds服务
-func (vds *VDS) Run() {
+// Start 启动vds服务
+func (vds *VDS) Start() {
+	log.Println("正在启动 vds ")
 	go vds.dispatcher.Run()
 	go vds.ingressRouter.Run()
 	go vds.readerLoop()
@@ -158,10 +164,17 @@ func (vds *VDS) Stop() {
 	vds.mu.Lock()
 	defer vds.mu.Unlock()
 
+	err := vds.conn.Close()
+	if err != nil {
+		log.Printf("连接关闭失败:%v \n", err)
+	}
+
 	vds.ingressRouter.Stop()
 	for _, vd := range vds.vdById {
 		vd.Stop()
 	}
 	vds.aggregator.Stop()
 	vds.dispatcher.Stop()
+
+	log.Println("vds 停止")
 }

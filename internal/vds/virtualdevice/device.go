@@ -20,15 +20,33 @@ type VirtualDevice struct {
 	stop            chan struct{}      // 停止工作
 }
 
-func NewVirtualDevice(id string, cipher cipher.Cipher, receiveCh <-chan message.Message, params types.VDParams) *VirtualDevice {
-	return &VirtualDevice{
+type Option func(*VirtualDevice)
+
+func WithCipher(c cipher.Cipher) Option {
+	return func(vd *VirtualDevice) {
+		vd.cipher = c
+	}
+}
+
+func WithParams(p types.VDParams) Option {
+	return func(vd *VirtualDevice) {
+		vd.params = p
+	}
+}
+
+func NewVirtualDevice(id string, receiveCh <-chan message.Message, opts ...Option) *VirtualDevice {
+	vd := &VirtualDevice{
 		ID:        id,
-		cipher:    cipher,
 		receiveCh: receiveCh,
 		sendCh:    make(chan message.Task, 50),
-		params:    params,
 		stop:      make(chan struct{}),
 	}
+
+	for _, opt := range opts {
+		opt(vd)
+	}
+
+	return vd
 }
 
 // OutChan 消息任务发送出口

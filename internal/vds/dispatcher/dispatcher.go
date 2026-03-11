@@ -33,6 +33,7 @@ func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDR
 
 // Run 运行消息分发器, 创建工人并开始工作 (阻塞)
 func (d *Dispatcher) Run() {
+	log.Println("正在启动 dispatcher")
 	d.workerPool.Start(d.dispatch)
 	d.workerPool.Wait()
 }
@@ -40,6 +41,7 @@ func (d *Dispatcher) Run() {
 // Stop 停止消息分发器 (注意：强制停止，会使 incomingCh 上游阻塞，)
 func (d *Dispatcher) Stop() {
 	d.workerPool.Stop()
+	log.Println("dispatcher 停止")
 }
 
 // dispatch 分发消息
@@ -61,13 +63,13 @@ func (d *Dispatcher) dispatch(messagingTask message.Task) {
 
 // dispatchUnicast 分发单播消息（消息有明确目标地址的情况）
 func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
-	srcState, err := d.vdRepository.GetVDStateById(ctx, msg.SrcID)
+	srcState, err := d.vdRepository.GetVDParamsById(ctx, msg.SrcID)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取消息来源设备 %s 的状态: %v\n", msg.SrcID, err)
 		return
 	}
 
-	dstState, err := d.vdRepository.GetVDStateById(ctx, msg.DstID)
+	dstState, err := d.vdRepository.GetVDParamsById(ctx, msg.DstID)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取消息目标设备 %s 的状态: %v\n", msg.DstID, err)
 		return
@@ -152,7 +154,7 @@ func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message)
 // FindValidTargetVDs 根据消息来源设备id找到能够到达的目标设备id (指能够接收，且通信参数匹配可以沟通)
 func (d *Dispatcher) FindValidTargetVDs(ctx context.Context, srcId string) ([]string, error) {
 	// 1. 获得所有在线设备信息 (包括消息来源设备)
-	onlineVDById, err := d.vdRepository.GetAllVDStates(ctx)
+	onlineVDById, err := d.vdRepository.GetAllVDParams(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取来源设备 %s 能沟通的设备: %v\n", srcId, err)
 		return nil, err
