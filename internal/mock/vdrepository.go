@@ -6,28 +6,28 @@ import (
 	"fmt"
 	"time"
 	"virturalDevice/internal/connection"
-	"virturalDevice/internal/vds/types"
-	"virturalDevice/internal/vds/vdrepository"
+	"virturalDevice/internal/vds/repository"
+	"virturalDevice/internal/vds/virtualdevice"
 )
 
 // Repository 测试用模拟vdRepo
 type Repository struct {
 	connById     map[string]connection.Connection
-	vdParamsByID map[string]types.VDParams
+	vdParamsByID map[string]virtualdevice.Params
 
 	simulatedLatency time.Duration //模拟数据库操作的延迟，便于测试context取消功能
 }
 
 // NewVDRepository 创建mock repo, simulatedLatency 用于模拟数据库操作时间
-func NewVDRepository(simulatedLatency time.Duration) vdrepository.VDRepository {
+func NewVDRepository(simulatedLatency time.Duration) repository.VDRepository {
 	return &Repository{
 		connById:         make(map[string]connection.Connection),
-		vdParamsByID:     make(map[string]types.VDParams),
+		vdParamsByID:     make(map[string]virtualdevice.Params),
 		simulatedLatency: simulatedLatency,
 	}
 }
 
-func (repo *Repository) SetVDParamsById(ctx context.Context, id string, params types.VDParams) error {
+func (repo *Repository) SetParams(ctx context.Context, id string, params virtualdevice.Params) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -37,7 +37,7 @@ func (repo *Repository) SetVDParamsById(ctx context.Context, id string, params t
 	}
 }
 
-func (repo *Repository) GetVDParamsById(ctx context.Context, id string) (types.VDParams, error) {
+func (repo *Repository) Params(ctx context.Context, id string) (virtualdevice.Params, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -49,7 +49,7 @@ func (repo *Repository) GetVDParamsById(ctx context.Context, id string) (types.V
 	}
 }
 
-func (repo *Repository) GetAllVDParams(ctx context.Context) (map[string]types.VDParams, error) {
+func (repo *Repository) AllParams(ctx context.Context) (map[string]virtualdevice.Params, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -61,7 +61,7 @@ func (repo *Repository) GetAllVDParams(ctx context.Context) (map[string]types.VD
 	}
 }
 
-func (repo *Repository) GetVDConnById(ctx context.Context, id string) (connection.Connection, error) {
+func (repo *Repository) Connection(ctx context.Context, id string) (connection.Connection, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -73,7 +73,7 @@ func (repo *Repository) GetVDConnById(ctx context.Context, id string) (connectio
 	}
 }
 
-func (repo *Repository) SetVDConnById(ctx context.Context, id string, conn connection.Connection) error {
+func (repo *Repository) SetConnection(ctx context.Context, id string, conn connection.Connection) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -84,7 +84,7 @@ func (repo *Repository) SetVDConnById(ctx context.Context, id string, conn conne
 }
 
 // RemoveVDConnById 注意：移除不存在的VDConn不会返回error
-func (repo *Repository) RemoveVDConnById(ctx context.Context, id string) error {
+func (repo *Repository) RemoveConnection(ctx context.Context, id string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

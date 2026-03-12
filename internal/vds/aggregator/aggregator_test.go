@@ -5,15 +5,15 @@ import (
 	"log"
 	"strconv"
 	"testing"
-	"virturalDevice/internal/message"
+	message2 "virturalDevice/internal/vds/virtualdevice/message"
 )
 
 func TestAggregatorBasicLifeCycle(t *testing.T) {
 
 	// aggregator 消息入口
-	inChs := make([]chan message.Task, 3)
+	inChs := make([]chan message2.Task, 3)
 	for i := 0; i < 3; i++ {
-		inChs[i] = make(chan message.Task)
+		inChs[i] = make(chan message2.Task)
 	}
 
 	a := NewAggregator()
@@ -25,7 +25,7 @@ func TestAggregatorBasicLifeCycle(t *testing.T) {
 	}
 
 	// 消费 aggregator 出口消息并打印日志
-	go func(outCh <-chan message.Task) {
+	go func(outCh <-chan message2.Task) {
 		for task := range outCh {
 			log.Printf("task received from %v, message: %v\n", task.Message.SrcID, task.Message.Payload)
 		}
@@ -35,9 +35,9 @@ func TestAggregatorBasicLifeCycle(t *testing.T) {
 	for i := range inChs {
 		go func(i int) {
 			for j := 0; j < 5; j++ {
-				inChs[i] <- message.Task{
+				inChs[i] <- message2.Task{
 					Ctx: context.Background(),
-					Message: message.Message{
+					Message: message2.Message{
 						SrcID:   strconv.Itoa(i),
 						Payload: []byte{byte(j)},
 					},

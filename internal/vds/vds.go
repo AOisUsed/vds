@@ -9,14 +9,14 @@ import (
 	"sync"
 	"time"
 	"virturalDevice/internal/connection"
-	"virturalDevice/internal/message"
 	"virturalDevice/internal/vds/aggregator"
 	"virturalDevice/internal/vds/codec"
 	"virturalDevice/internal/vds/dispatcher"
 	"virturalDevice/internal/vds/ingressrouter"
+	"virturalDevice/internal/vds/repository"
 	"virturalDevice/internal/vds/sender"
-	"virturalDevice/internal/vds/vdrepository"
 	"virturalDevice/internal/vds/virtualdevice"
+	"virturalDevice/internal/vds/virtualdevice/message"
 )
 
 type VDS struct {
@@ -28,7 +28,7 @@ type VDS struct {
 	incomingCh chan message.Message
 
 	// 数据
-	vdRepository vdrepository.VDRepository // 虚拟设备信息仓库
+	vdRepository repository.VDRepository // 虚拟设备信息仓库
 
 	// 消息处理
 	ingressRouter *ingressrouter.IngressRouter // 消息入口路由
@@ -43,7 +43,7 @@ type VDS struct {
 }
 
 // NewVDS 初始化VDS(无设备)
-func NewVDS(conn connection.Connection, repo vdrepository.VDRepository, sender sender.Sender, codec codec.Codec) *VDS {
+func NewVDS(conn connection.Connection, repo repository.VDRepository, sender sender.Sender, codec codec.Codec) *VDS {
 	vds := &VDS{
 		vdById:       make(map[string]*virtualdevice.VirtualDevice),
 		conn:         conn,
@@ -99,7 +99,7 @@ func (vds *VDS) RegisterDeviceConn(ctx context.Context, id string, opts ...virtu
 	// 创建并运行 vd
 	vds.connectDeviceUnsafe(id, opts...)
 	// 调用 vdRepository 把vd注册到registry中
-	err := vds.vdRepository.SetVDConnById(ctx, id, vds.conn)
+	err := vds.vdRepository.SetConnection(ctx, id, vds.conn)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			log.Printf("注册设备%v连接信息取消：%v\n", id, err)
@@ -119,7 +119,7 @@ func (vds *VDS) DeregisterDeviceConn(ctx context.Context, id string) error {
 	vds.mu.Lock()
 	defer vds.mu.Unlock()
 
-	err := vds.vdRepository.RemoveVDConnById(ctx, id)
+	err := vds.vdRepository.RemoveConnection(ctx, id)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			log.Printf("删除设备%v连接信息取消：%v\n", id, err)

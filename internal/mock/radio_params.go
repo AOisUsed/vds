@@ -1,7 +1,7 @@
 package mock
 
 import (
-	"virturalDevice/internal/vds/types"
+	"virturalDevice/internal/vds/virtualdevice"
 )
 
 type RadioParams struct {
@@ -43,7 +43,7 @@ func NewRadioParams(ops ...Options) *RadioParams {
 	return &p
 }
 
-func (p *RadioParams) IsCompatibleWith(other types.VDParams) bool {
+func (p *RadioParams) IsCompatibleWith(other virtualdevice.Params) bool {
 	otherP, ok := other.(*RadioParams)
 	if !ok {
 		return false

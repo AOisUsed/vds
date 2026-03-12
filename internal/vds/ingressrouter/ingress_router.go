@@ -3,7 +3,7 @@ package ingressrouter
 import (
 	"log"
 	"sync"
-	"virturalDevice/internal/message"
+	"virturalDevice/internal/vds/virtualdevice/message"
 )
 
 // IngressRouter vds中的入口路由，可以将vds收到的消息发送到对应的虚拟设备中

@@ -182,17 +182,17 @@ func TestBasicCommunication(t *testing.T) {
 	repo := mock.NewVDRepository(time.Millisecond * 600)
 
 	// 存入 3个设备的 params，用于比对是否匹配
-	err := repo.SetVDParamsById(context.Background(), "1", mock.NewRadioParams())
+	err := repo.SetParams(context.Background(), "1", mock.NewRadioParams())
 	if err != nil {
 		return
 	}
 
-	err = repo.SetVDParamsById(context.Background(), "2", mock.NewRadioParams())
+	err = repo.SetParams(context.Background(), "2", mock.NewRadioParams())
 	if err != nil {
 		return
 	}
 
-	err = repo.SetVDParamsById(context.Background(), "3", mock.NewRadioParams())
+	err = repo.SetParams(context.Background(), "3", mock.NewRadioParams())
 	if err != nil {
 		return
 	}

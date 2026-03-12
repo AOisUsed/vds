@@ -12,8 +12,8 @@ type Message struct {
 	Payload []byte
 }
 
-// Byte 将消息转化为byte
-func (m Message) Byte() []byte {
+// Bytes 将消息转化为byte
+func (m Message) Bytes() []byte {
 	buf := new(bytes.Buffer)
 	buf.Write([]byte(m.SrcID))
 	buf.Write([]byte(m.DstID))

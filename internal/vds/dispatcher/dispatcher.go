@@ -5,23 +5,23 @@ import (
 	"errors"
 	"log"
 	"sync"
-	"virturalDevice/internal/message"
 	"virturalDevice/internal/vds/codec"
+	"virturalDevice/internal/vds/repository"
 	"virturalDevice/internal/vds/sender"
-	"virturalDevice/internal/vds/vdrepository"
+	message2 "virturalDevice/internal/vds/virtualdevice/message"
 )
 
 // Dispatcher 消息分发器
 type Dispatcher struct {
-	incomingCh   <-chan message.Task // 接收来自消息集中器的消息
-	vdRepository vdrepository.VDRepository
+	incomingCh   <-chan message2.Task // 接收来自消息集中器的消息
+	vdRepository repository.VDRepository
 	codec        codec.Codec
 	sender       sender.Sender
 
 	workerPool *WorkerPool
 }
 
-func NewDispatcher(incomingCh <-chan message.Task, vdRepository vdrepository.VDRepository, codec codec.Codec, sender sender.Sender, numWorkers int) *Dispatcher {
+func NewDispatcher(incomingCh <-chan message2.Task, vdRepository repository.VDRepository, codec codec.Codec, sender sender.Sender, numWorkers int) *Dispatcher {
 	return &Dispatcher{
 		incomingCh:   incomingCh,
 		vdRepository: vdRepository,
@@ -45,7 +45,7 @@ func (d *Dispatcher) Stop() {
 }
 
 // dispatch 分发消息
-func (d *Dispatcher) dispatch(messagingTask message.Task) {
+func (d *Dispatcher) dispatch(messagingTask message2.Task) {
 	ctx := messagingTask.Ctx
 	msg := messagingTask.Message
 	select {
@@ -62,14 +62,14 @@ func (d *Dispatcher) dispatch(messagingTask message.Task) {
 }
 
 // dispatchUnicast 分发单播消息（消息有明确目标地址的情况）
-func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
-	srcParams, err := d.vdRepository.GetVDParamsById(ctx, msg.SrcID)
+func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message2.Message) {
+	srcParams, err := d.vdRepository.Params(ctx, msg.SrcID)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取消息来源设备 %s 的状态: %v\n", msg.SrcID, err)
 		return
 	}
 
-	dstParams, err := d.vdRepository.GetVDParamsById(ctx, msg.DstID)
+	dstParams, err := d.vdRepository.Params(ctx, msg.DstID)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取消息目标设备 %s 的状态: %v\n", msg.DstID, err)
 		return
@@ -80,7 +80,7 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 		return
 	}
 
-	dstConn, err := d.vdRepository.GetVDConnById(ctx, msg.DstID)
+	dstConn, err := d.vdRepository.Connection(ctx, msg.DstID)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取目标设备 %s 的连接: %v\n", msg.DstID, err)
 		return
@@ -97,7 +97,7 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 }
 
 // dispatchUnicast 分发多播消息（消息无明确目标地址的情况）
-func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message) {
+func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message2.Message) {
 	// 找到所有可达设备
 	dstIDs, err := d.FindValidTargetVDs(ctx, msg.SrcID)
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -124,13 +124,13 @@ func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message)
 			default:
 			}
 
-			dstConn, err := d.vdRepository.GetVDConnById(ctx, dstID)
+			dstConn, err := d.vdRepository.Connection(ctx, dstID)
 			if err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("无法获取多播消息目标设备 %s 的连接信息: %v\n", dstID, err)
 				return
 			}
 
-			msgToSend := message.Message{
+			msgToSend := message2.Message{
 				SrcID:   msg.SrcID,
 				DstID:   dstID,
 				Payload: msg.Payload,
@@ -154,7 +154,7 @@ func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message)
 // FindValidTargetVDs 根据消息来源设备id找到能够到达的目标设备id (指能够接收，且通信参数匹配可以沟通)
 func (d *Dispatcher) FindValidTargetVDs(ctx context.Context, srcId string) ([]string, error) {
 	// 1. 获得所有在线设备信息 (包括消息来源设备)
-	onlineVDById, err := d.vdRepository.GetAllVDParams(ctx)
+	onlineVDById, err := d.vdRepository.AllParams(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Printf("无法获取来源设备 %s 能沟通的设备: %v\n", srcId, err)
 		return nil, err

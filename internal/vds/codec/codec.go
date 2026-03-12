@@ -1,6 +1,8 @@
 package codec
 
-import "virturalDevice/internal/message"
+import (
+	"virturalDevice/internal/vds/virtualdevice/message"
+)
 
 type Codec interface {
 	Encode(msg message.Message) ([]byte, error)
