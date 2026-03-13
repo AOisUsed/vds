@@ -208,34 +208,34 @@ func TestBasicCommunication(t *testing.T) {
 	vds2.Start()
 
 	// vds1 中注册设备1连接信息
-	err = vds1.RegisterDeviceConn(context.Background(), "1")
+	err = vds1.ConnectAndRegisterDevice(context.Background(), "1")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
 	// vds2 中注册设备2连接信息
-	err = vds2.RegisterDeviceConn(context.Background(), "2")
+	err = vds2.ConnectAndRegisterDevice(context.Background(), "2")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
 	// vds2 中注册设备3连接信息
-	err = vds2.RegisterDeviceConn(context.Background(), "3")
+	err = vds2.ConnectAndRegisterDevice(context.Background(), "3")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
 	// 设备1 给 设备2 发送消息
-	vds1.DeviceByID("1").Send("2", []byte("message 1->2"))
+	vds1.Device("1").Send("2", []byte("message 1->2"))
 
 	// 设备2 给 设备1 发送消息
-	vds2.DeviceByID("2").Send("1", []byte("message 2->1"))
+	vds2.Device("2").Send("1", []byte("message 2->1"))
 
 	// 设备1 发出广播
-	vds1.DeviceByID("1").Send("", []byte("1 发出 广播"))
+	vds1.Device("1").Send("", []byte("1发出的广播"))
 
 	// 设备2 发出广播
-	vds2.DeviceByID("2").Send("", []byte("2 发出 广播"))
+	vds2.Device("2").Send("", []byte("2发出的广播"))
 
 	time.Sleep(2 * time.Second)
 

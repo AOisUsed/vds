@@ -13,8 +13,7 @@ import (
 func TestDeviceSend(t *testing.T) {
 
 	inCh := make(chan message.Message)
-	cipher := mock.NewCipher()
-	dv := NewVirtualDevice("1", inCh, WithCipher(cipher), WithParams(mock.NewRadioParams()))
+	dv := NewVirtualDevice("1", inCh, WithParams(mock.NewRadioParams()))
 
 	outCh := dv.OutChan()
 
@@ -43,8 +42,7 @@ func TestDeviceSend(t *testing.T) {
 func TestDeviceReceive(t *testing.T) {
 
 	inCh := make(chan message.Message)
-	cipher := mock.NewCipher()
-	dv := NewVirtualDevice("1", inCh, WithCipher(cipher), WithParams(mock.NewRadioParams()))
+	dv := NewVirtualDevice("1", inCh, WithParams(mock.NewRadioParams()))
 	go dv.Run()
 
 	for i := 0; i < 10; i++ {

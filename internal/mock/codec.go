@@ -5,7 +5,7 @@ import (
 	"virturalDevice/internal/vds/virtualdevice/message"
 )
 
-// Codec 借用json marshal方式来模拟编解码
+// Codec 借用json方式来模拟编解码
 type Codec struct{}
 
 func NewCodec() *Codec {

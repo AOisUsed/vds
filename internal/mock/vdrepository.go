@@ -4,17 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 	"virturalDevice/internal/connection"
 	"virturalDevice/internal/vds/repository"
-	"virturalDevice/internal/vds/virtualdevice"
+	"virturalDevice/internal/vds/virtualdevice/params"
 )
 
 // Repository 测试用模拟vdRepo
 type Repository struct {
 	connById     map[string]connection.Connection
-	vdParamsByID map[string]virtualdevice.Params
+	vdParamsByID map[string]params.Params
 
+	rwMu             sync.RWMutex
 	simulatedLatency time.Duration //模拟数据库操作的延迟，便于测试context取消功能
 }
 
@@ -22,26 +24,30 @@ type Repository struct {
 func NewVDRepository(simulatedLatency time.Duration) repository.VDRepository {
 	return &Repository{
 		connById:         make(map[string]connection.Connection),
-		vdParamsByID:     make(map[string]virtualdevice.Params),
+		vdParamsByID:     make(map[string]params.Params),
 		simulatedLatency: simulatedLatency,
 	}
 }
 
-func (repo *Repository) SetParams(ctx context.Context, id string, params virtualdevice.Params) error {
+func (repo *Repository) SetParams(ctx context.Context, id string, params params.Params) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.Lock()
+		defer repo.rwMu.Unlock()
 		repo.vdParamsByID[id] = params
 		return nil
 	}
 }
 
-func (repo *Repository) Params(ctx context.Context, id string) (virtualdevice.Params, error) {
+func (repo *Repository) Params(ctx context.Context, id string) (params.Params, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.RLock()
+		defer repo.rwMu.RUnlock()
 		if val, ok := repo.vdParamsByID[id]; ok {
 			return val, nil
 		}
@@ -49,11 +55,13 @@ func (repo *Repository) Params(ctx context.Context, id string) (virtualdevice.Pa
 	}
 }
 
-func (repo *Repository) AllParams(ctx context.Context) (map[string]virtualdevice.Params, error) {
+func (repo *Repository) AllParams(ctx context.Context) (map[string]params.Params, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.RLock()
+		defer repo.rwMu.RUnlock()
 		if len(repo.vdParamsByID) <= 0 {
 			return nil, errors.New("数据库为空")
 		}
@@ -66,6 +74,8 @@ func (repo *Repository) Connection(ctx context.Context, id string) (connection.C
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.RLock()
+		defer repo.rwMu.RUnlock()
 		if val, ok := repo.connById[id]; ok {
 			return val, nil
 		}
@@ -78,17 +88,21 @@ func (repo *Repository) SetConnection(ctx context.Context, id string, conn conne
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.Lock()
+		defer repo.rwMu.Unlock()
 		repo.connById[id] = conn
 		return nil
 	}
 }
 
-// RemoveVDConnById 注意：移除不存在的VDConn不会返回error
+// RemoveConnection 注意：移除不存在的VDConn不会返回error
 func (repo *Repository) RemoveConnection(ctx context.Context, id string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.Lock()
+		defer repo.rwMu.Unlock()
 		delete(repo.connById, id)
 		return nil
 	}

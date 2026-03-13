@@ -3,8 +3,9 @@ package virtualdevice
 import (
 	"context"
 	"log"
-	"virturalDevice/internal/cipher"
+	"virturalDevice/internal/vds/virtualdevice/cipher"
 	"virturalDevice/internal/vds/virtualdevice/message"
+	"virturalDevice/internal/vds/virtualdevice/params"
 )
 
 // VirtualDevice 虚拟通信设备，默认操作是单线程，并发不安全
@@ -13,7 +14,7 @@ type VirtualDevice struct {
 	cipher    cipher.Cipher          // 密码机
 	receiveCh <-chan message.Message // 消息接收通道
 	sendCh    chan message.Task      // 消息任务发送通道
-	params    Params                 // 设备参数
+	params    params.Params          // 设备参数
 
 	cancelMessaging context.CancelFunc // 取消消息发送函数
 	stop            chan struct{}      // 停止工作信号通道
@@ -27,7 +28,7 @@ func WithCipher(c cipher.Cipher) Option {
 	}
 }
 
-func WithParams(p Params) Option {
+func WithParams(p params.Params) Option {
 	return func(vd *VirtualDevice) {
 		vd.params = p
 	}
@@ -39,14 +40,13 @@ func NewVirtualDevice(id string, receiveCh <-chan message.Message, opts ...Optio
 		receiveCh: receiveCh,
 		sendCh:    make(chan message.Task, 50), // 缓存大小可以根据实际情况调整，暂时设为50
 		stop:      make(chan struct{}),
+
+		cipher: cipher.NewPlain(), // 默认明文密码机
+		params: params.NewEmpty(), // 默认空白参数
 	}
 
 	for _, opt := range opts {
 		opt(vd)
-	}
-
-	if vd.params == nil || vd.cipher == nil { // todo: 防止缺少零件的临时设计，后续需要修改
-		panic("缺少params或cipher")
 	}
 
 	return vd
@@ -77,14 +77,19 @@ func (vd *VirtualDevice) Run() {
 				continue
 			}
 			// 打印消息内容
-			log.Printf("虚拟设备 %v 收到消息，内容是：%s\n", vd.id, bodyDecrypted)
+			log.Printf("虚拟设备 %v 收到消息，内容是：%q\n", vd.id, bodyDecrypted)
 		}
 	}
 }
 
 // Send 虚拟设备发出消息 (非并发安全)
 func (vd *VirtualDevice) Send(dstId string, body []byte) {
-	log.Printf("虚拟设备 %v 正在发送消息给%v\n", vd.id, dstId)
+	if dstId == "" {
+		log.Printf("虚拟设备 %v 正在广播消息\n", vd.id)
+	} else {
+		log.Printf("虚拟设备 %v 正在发送消息给%v\n", vd.id, dstId)
+	}
+
 	bodyEncrypted, err := vd.cipher.Encrypt(body)
 	if err != nil {
 		log.Printf("%v无法加密消息: %s\n", vd.id, err)
@@ -112,7 +117,7 @@ func (vd *VirtualDevice) CancelSend() {
 	log.Printf("虚拟设备 %v 当前无正在发送的消息，无法取消\n", vd.id)
 }
 
-// Stop 停止虚拟设备发送/接收消息 (会阻塞上游receiveCh) (非并发安全) // todo: 加入其他业务后需要修改
+// Stop 停止虚拟设备发送/接收消息 (会阻塞上游receiveCh) (非并发安全) // todo: 如果后续添加的其他业务会启动常驻goroutine，也要添加对应的资源关闭机制
 func (vd *VirtualDevice) Stop() {
 	close(vd.stop)
 	close(vd.sendCh)

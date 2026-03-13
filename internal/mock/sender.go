@@ -4,7 +4,7 @@ import (
 	"virturalDevice/internal/connection"
 )
 
-// 只发送一次，不管错误的sender
+// Sender 只发送一次，不进行任何处理的sender
 type Sender struct{}
 
 func NewSender() *Sender {
