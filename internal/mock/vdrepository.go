@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"virturalDevice/internal/connection"
+	"virturalDevice/internal/vds/connection"
 	"virturalDevice/internal/vds/repository"
 	"virturalDevice/internal/vds/virtualdevice/params"
 )

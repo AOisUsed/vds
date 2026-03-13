@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"virturalDevice/internal/connection"
+	"virturalDevice/internal/vds/connection"
 	"virturalDevice/internal/vds/virtualdevice/params"
 )
 

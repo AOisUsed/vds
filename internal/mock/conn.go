@@ -12,7 +12,7 @@ type Conn struct {
 
 func NewConn() *Conn {
 	return &Conn{
-		dataCh: make(chan []byte),
+		dataCh: make(chan []byte, 10),
 	}
 }
 
