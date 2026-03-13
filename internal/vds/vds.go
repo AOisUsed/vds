@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"sync"
 	"time"
-	"virturalDevice/internal/connection"
 	"virturalDevice/internal/vds/aggregator"
 	"virturalDevice/internal/vds/codec"
+	"virturalDevice/internal/vds/connection"
 	"virturalDevice/internal/vds/dispatcher"
 	"virturalDevice/internal/vds/ingressrouter"
 	"virturalDevice/internal/vds/repository"
@@ -225,7 +225,8 @@ func (vds *VDS) Stop() {
 	}
 
 	vds.ingressRouter.Stop()
-	for _, vd := range vds.vdById {
+	for id, vd := range vds.vdById {
+		vds.DeregisterDeviceConn(context.Background(), id)
 		vd.Stop()
 	}
 	vds.aggregator.Stop()

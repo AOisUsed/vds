@@ -1,7 +1,7 @@
 package sender
 
 import (
-	"virturalDevice/internal/connection"
+	"virturalDevice/internal/vds/connection"
 )
 
 // Sender vds内统一消息发送器

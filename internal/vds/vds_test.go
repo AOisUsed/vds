@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"runtime"
 	"strconv"
 	"sync"
@@ -180,23 +181,6 @@ func TestBasicCommunication(t *testing.T) {
 
 	// vds1, vds2 公用的repository (临时使用)
 	repo := mock.NewVDRepository(time.Millisecond * 600)
-
-	// 存入 3个设备的 params，用于比对是否匹配
-	err := repo.SetParams(context.Background(), "1", mock.NewRadioParams())
-	if err != nil {
-		return
-	}
-
-	err = repo.SetParams(context.Background(), "2", mock.NewRadioParams())
-	if err != nil {
-		return
-	}
-
-	err = repo.SetParams(context.Background(), "3", mock.NewRadioParams())
-	if err != nil {
-		return
-	}
-
 	// 创造并启动 vds1
 	vds1 := NewVDS(mock.NewConn(), repo, mock.NewSender(), mock.NewCodec())
 	wg.Add(1)
@@ -208,31 +192,31 @@ func TestBasicCommunication(t *testing.T) {
 	vds2.Start()
 
 	// vds1 中注册设备1连接信息，更新设备参数
-	err = vds1.UpdateDeviceParams(context.Background(), "1")
+	err := vds1.ConnectAndRegisterDevice(context.Background(), "1")
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds1.ConnectAndRegisterDevice(context.Background(), "1")
+	err = vds1.UpdateDeviceParams(context.Background(), "1")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
 	// vds2 中注册设备2连接信息，更新设备参数
-	err = vds2.UpdateDeviceParams(context.Background(), "2")
+	err = vds2.ConnectAndRegisterDevice(context.Background(), "2")
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds2.ConnectAndRegisterDevice(context.Background(), "2")
+	err = vds2.UpdateDeviceParams(context.Background(), "2")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
 	// vds2 中注册设备3连接信息，更新设备参数
-	err = vds2.UpdateDeviceParams(context.Background(), "3")
+	err = vds2.ConnectAndRegisterDevice(context.Background(), "3")
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds2.ConnectAndRegisterDevice(context.Background(), "3")
+	err = vds2.UpdateDeviceParams(context.Background(), "3")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -259,6 +243,59 @@ func TestBasicCommunication(t *testing.T) {
 	vds2.Stop()
 	wg.Done()
 
-	fmt.Printf("\ngoroutine数量:%v\n", runtime.NumGoroutine())
+	wg.Wait()
+}
+
+func TestConcurrentCommunication(t *testing.T) {
+	var wg sync.WaitGroup
+
+	// 公用的repository (临时使用)
+	repo := mock.NewVDRepository(time.Millisecond * 600)
+
+	// 创造并启动数个vds
+	var vdss []*VDS
+	for i := 0; i < 5; i++ {
+		vdss = append(vdss, NewVDS(mock.NewConn(), repo, mock.NewSender(), mock.NewCodec()))
+		wg.Add(1)
+		vdss[i].Start()
+	}
+
+	idg := NewIdGenerator()
+
+	for _, vds := range vdss {
+		// 每个 vds 中产生数个 vd
+		numVD := rand.Int() % 10
+		// 每个 vds 并发产生多个 vd,并发送消息
+		go func(vds *VDS) {
+			for j := 0; j < numVD; j++ {
+				id := idg.Next()
+				go func(vds *VDS) {
+					err := vds.ConnectAndRegisterDevice(context.Background(), id)
+					if err != nil {
+						log.Println(err.Error())
+					}
+					err = vds.UpdateDeviceParams(context.Background(), id)
+
+					dstId := rand.Int() % idg.Max()
+					if dstId%3 == 0 {
+						vds.Device(id).Send(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
+					} else {
+						vds.Device(id).Send("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
+					}
+
+				}(vds)
+			}
+		}(vds)
+	}
+
+	// 等待发送完成
+	time.Sleep(4 * time.Second)
+	fmt.Println("\n 即将开始关闭vds")
+	// 停止 vds
+	for _, vds := range vdss {
+		vds.Stop()
+		wg.Done()
+	}
+
 	wg.Wait()
 }
