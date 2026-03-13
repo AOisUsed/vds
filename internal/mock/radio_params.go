@@ -10,26 +10,26 @@ type RadioParams struct {
 	CryptoMode int
 }
 
-type Options func(*RadioParams)
+type Option func(*RadioParams)
 
-func (p *RadioParams) WithMode(mode int) Options {
+func WithMode(mode int) Option {
 	return func(p *RadioParams) {
 		p.Mode = mode
 	}
 }
 
-func (p *RadioParams) WithIsOn(isOn bool) Options {
+func WithIsOn(isOn bool) Option {
 	return func(p *RadioParams) {
 		p.IsOn = isOn
 	}
 }
-func (p *RadioParams) WithCryptoMode(cryptoMode int) Options {
+func WithCryptoMode(cryptoMode int) Option {
 	return func(p *RadioParams) {
 		p.CryptoMode = cryptoMode
 	}
 }
 
-func NewRadioParams(ops ...Options) *RadioParams {
+func NewRadioParams(ops ...Option) *RadioParams {
 
 	var p = RadioParams{
 		Mode:       0,

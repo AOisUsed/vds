@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 	"virturalDevice/internal/mock"
+	"virturalDevice/internal/vds/virtualdevice"
 )
 
 // 单机使用vds (repo仅在此vds中)
@@ -291,6 +292,64 @@ func TestConcurrentCommunication(t *testing.T) {
 	// 等待发送完成
 	time.Sleep(4 * time.Second)
 	fmt.Println("\n 即将开始关闭vds")
+	// 停止 vds
+	for _, vds := range vdss {
+		vds.Stop()
+		wg.Done()
+	}
+
+	wg.Wait()
+}
+
+func TestBasicParamMatchCommunication(t *testing.T) {
+	var wg sync.WaitGroup
+
+	// 公用的repository (临时使用)
+	repo := mock.NewVDRepository(time.Millisecond * 20)
+
+	// 创造并启动数个vds
+	var vdss []*VDS
+	for i := 0; i < 2; i++ {
+		vdss = append(vdss, NewVDS(mock.NewConn(), repo, mock.NewSender(), mock.NewCodec()))
+		wg.Add(1)
+		vdss[i].Start()
+	}
+
+	idg := NewIdGenerator()
+	for _, vds := range vdss {
+		// 每个 vds 中产生数个 vd
+		numVD := rand.Int() % 6
+		// 每个 vds 并发产生多个 vd,并发送消息
+		go func(vds *VDS) {
+			for j := 0; j < numVD; j++ {
+				id := idg.Next()
+				go func(vds *VDS, j int) {
+					mode := j % 3
+					err := vds.ConnectAndRegisterDevice(context.Background(), id,
+						virtualdevice.WithParams(
+							mock.NewRadioParams(mock.WithMode(mode)), // todo：还没写完
+						),
+					)
+					if err != nil {
+						log.Println(err.Error())
+					}
+					log.Printf("设备%v的mode是%v\n", id, mode)
+					err = vds.UpdateDeviceParams(context.Background(), id)
+
+					dstId := rand.Int() % idg.Max()
+					if dstId%3 == 0 {
+						vds.Device(id).Send(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
+					} else {
+						vds.Device(id).Send("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
+					}
+
+				}(vds, j)
+			}
+		}(vds)
+	}
+
+	time.Sleep(5 * time.Second)
+
 	// 停止 vds
 	for _, vds := range vdss {
 		vds.Stop()

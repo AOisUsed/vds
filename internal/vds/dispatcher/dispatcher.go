@@ -76,7 +76,7 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 	}
 
 	if !srcParams.IsCompatibleWith(dstParams) {
-		log.Printf("消息来源 %s 设备与 消息目标 %s 设备无法沟通\n", msg.SrcID, msg.DstID)
+		log.Printf("消息来源 %s 设备与 消息目标 %s 设备无法沟通，取消发送\n", msg.SrcID, msg.DstID)
 		return
 	}
 

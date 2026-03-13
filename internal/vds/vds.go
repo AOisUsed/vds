@@ -226,7 +226,7 @@ func (vds *VDS) Stop() {
 
 	vds.ingressRouter.Stop()
 	for id, vd := range vds.vdById {
-		_ = vds.DeregisterDeviceConn(context.Background(), id) // 尝试删除设备连接信息，删除失败也要停止本地goroutine
+		_ = vds.DeregisterDeviceConn(context.Background(), id) // 尝试删除数据仓库中设备连接信息，删除失败也要停止本地goroutine
 		vd.Stop()
 	}
 	vds.aggregator.Stop()
