@@ -144,27 +144,27 @@ func TestConcurrentRegisterDeregisterDevice(t *testing.T) {
 	// 启动 vds
 	vds.Start()
 
-	var regderegWg sync.WaitGroup
+	var regDeregWg sync.WaitGroup
 
 	// 并发注册设备连接信息
 	for i := 0; i < 5; i++ {
-		regderegWg.Add(1)
+		regDeregWg.Add(1)
 		go func() {
-			defer regderegWg.Done()
+			defer regDeregWg.Done()
 			_ = vds.RegisterDeviceConn(context.Background(), strconv.Itoa(i))
 		}()
 	}
 
 	// 并发删除设备连接信息
 	for i := 0; i < 5; i++ {
-		regderegWg.Add(1)
+		regDeregWg.Add(1)
 		go func() {
-			defer regderegWg.Done()
+			defer regDeregWg.Done()
 			_ = vds.DeregisterDeviceConn(context.Background(), strconv.Itoa(i))
 		}()
 	}
 
-	regderegWg.Wait()
+	regDeregWg.Wait()
 
 	fmt.Println("\n 即将开始关闭vds")
 	// 停止 vds
@@ -207,19 +207,31 @@ func TestBasicCommunication(t *testing.T) {
 	wg.Add(1)
 	vds2.Start()
 
-	// vds1 中注册设备1连接信息
+	// vds1 中注册设备1连接信息，更新设备参数
+	err = vds1.UpdateDeviceParams(context.Background(), "1")
+	if err != nil {
+		log.Println(err.Error())
+	}
 	err = vds1.ConnectAndRegisterDevice(context.Background(), "1")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
-	// vds2 中注册设备2连接信息
+	// vds2 中注册设备2连接信息，更新设备参数
+	err = vds2.UpdateDeviceParams(context.Background(), "2")
+	if err != nil {
+		log.Println(err.Error())
+	}
 	err = vds2.ConnectAndRegisterDevice(context.Background(), "2")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
-	// vds2 中注册设备3连接信息
+	// vds2 中注册设备3连接信息，更新设备参数
+	err = vds2.UpdateDeviceParams(context.Background(), "3")
+	if err != nil {
+		log.Println(err.Error())
+	}
 	err = vds2.ConnectAndRegisterDevice(context.Background(), "3")
 	if err != nil {
 		log.Println(err.Error())

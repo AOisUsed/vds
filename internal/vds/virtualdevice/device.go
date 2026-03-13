@@ -52,34 +52,14 @@ func NewVirtualDevice(id string, receiveCh <-chan message.Message, opts ...Optio
 	return vd
 }
 
-// OutChan 消息任务发送出口
-func (vd *VirtualDevice) OutChan() <-chan message.Task {
-	return vd.sendCh
+// Params 设备参数
+func (vd *VirtualDevice) Params() params.Params {
+	return vd.params
 }
 
-// Run 运行虚拟设备，接收消息，打印到控制台，生命周期由上游关闭通道结束
-func (vd *VirtualDevice) Run() {
-	log.Printf("开始运行设备%v\n", vd.id)
-	defer log.Printf("设备%v停止运行\n", vd.id)
-
-	for {
-		select {
-		case <-vd.stop:
-			return
-		case incomingMessage, ok := <-vd.receiveCh:
-			if !ok {
-				return
-			}
-			// 解密消息
-			bodyDecrypted, err := vd.cipher.Decrypt(incomingMessage.Payload)
-			if err != nil {
-				log.Printf("%v无法解密收到的消息: %s\n", vd.id, err)
-				continue
-			}
-			// 打印消息内容
-			log.Printf("虚拟设备 %v 收到消息，内容是：%q\n", vd.id, bodyDecrypted)
-		}
-	}
+// OutChan 获取消息任务发送出口
+func (vd *VirtualDevice) OutChan() <-chan message.Task {
+	return vd.sendCh
 }
 
 // Send 虚拟设备发出消息 (非并发安全)
@@ -115,6 +95,31 @@ func (vd *VirtualDevice) CancelSend() {
 		vd.cancelMessaging()
 	}
 	log.Printf("虚拟设备 %v 当前无正在发送的消息，无法取消\n", vd.id)
+}
+
+// Run 运行虚拟设备，接收消息，打印到控制台，生命周期由上游关闭通道结束
+func (vd *VirtualDevice) Run() {
+	log.Printf("开始运行设备%v\n", vd.id)
+	defer log.Printf("设备%v停止运行\n", vd.id)
+
+	for {
+		select {
+		case <-vd.stop:
+			return
+		case incomingMessage, ok := <-vd.receiveCh:
+			if !ok {
+				return
+			}
+			// 解密消息
+			bodyDecrypted, err := vd.cipher.Decrypt(incomingMessage.Payload)
+			if err != nil {
+				log.Printf("%v无法解密收到的消息: %s\n", vd.id, err)
+				continue
+			}
+			// 打印消息内容
+			log.Printf("虚拟设备 %v 收到消息，内容是：%q\n", vd.id, bodyDecrypted)
+		}
+	}
 }
 
 // Stop 停止虚拟设备发送/接收消息 (会阻塞上游receiveCh) (非并发安全) // todo: 如果后续添加的其他业务会启动常驻goroutine，也要添加对应的资源关闭机制

@@ -3,6 +3,7 @@ package vds
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"runtime"
@@ -92,6 +93,22 @@ func (vds *VDS) readerLoop() {
 		}
 		vds.incomingCh <- msg
 	}
+}
+
+// UpdateDeviceParams 数据仓库中更新设备参数
+func (vds *VDS) UpdateDeviceParams(ctx context.Context, id string) error {
+	vds.rwMutex.RLock()
+
+	vd, ok := vds.vdById[id]
+	if !ok {
+		vds.rwMutex.RUnlock()
+		return errors.New(fmt.Sprintf("vds中无设备%v", id))
+	}
+	vds.rwMutex.RUnlock()
+
+	params := vd.Params()
+	err := vds.vdRepository.SetParams(ctx, id, params)
+	return err
 }
 
 // RegisterDeviceConn 数据仓库中添加设备连接信息
