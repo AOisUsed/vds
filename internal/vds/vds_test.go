@@ -181,7 +181,7 @@ func TestBasicCommunication(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// vds1, vds2 公用的repository (临时使用)
-	repo := mock.NewVDRepository(time.Millisecond * 600)
+	repo := mock.NewVDRepository(time.Millisecond * 1)
 	// 创造并启动 vds1
 	vds1 := NewVDS(mock.NewConn(), repo, mock.NewSender(), mock.NewCodec())
 	wg.Add(1)
@@ -265,7 +265,8 @@ func TestConcurrentCommunication(t *testing.T) {
 
 	for _, vds := range vdss {
 		// 每个 vds 中产生数个 vd
-		numVD := rand.Int() % 10
+		numVD := rand.Int() % 50
+		//numVD := 5
 		// 每个 vds 并发产生多个 vd,并发送消息
 		go func(vds *VDS) {
 			for j := 0; j < numVD; j++ {
@@ -278,7 +279,7 @@ func TestConcurrentCommunication(t *testing.T) {
 					err = vds.UpdateDeviceParams(context.Background(), id)
 
 					dstId := rand.Int() % idg.Max()
-					if dstId%3 == 0 {
+					if dstId%3 != 0 {
 						vds.Device(id).Send(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
 					} else {
 						vds.Device(id).Send("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
@@ -290,13 +291,15 @@ func TestConcurrentCommunication(t *testing.T) {
 	}
 
 	// 等待发送完成
-	time.Sleep(4 * time.Second)
+	time.Sleep(5 * time.Second)
 	fmt.Println("\n 即将开始关闭vds")
 	// 停止 vds
 	for _, vds := range vdss {
 		vds.Stop()
 		wg.Done()
 	}
+
+	fmt.Printf("goroutine number: %v \n", runtime.NumGoroutine())
 
 	wg.Wait()
 }

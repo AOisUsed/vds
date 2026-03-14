@@ -145,7 +145,7 @@ func (vds *VDS) connectDevice(id string, opts ...virtualdevice.Option) {
 	if _, exists := vds.vdById[id]; exists {
 		vds.disconnectDevice(id)
 	}
-	routerOutCh := vds.ingressRouter.CreateOutboundChByID(id)
+	routerOutCh := vds.ingressRouter.CreateOutboundCh(id)
 	vd := virtualdevice.NewVirtualDevice(id, routerOutCh, opts...)
 	vdOutCh := vd.OutChan()
 	vds.aggregator.Watch(vdOutCh)
@@ -161,7 +161,7 @@ func (vds *VDS) disconnectDevice(id string) {
 	if _, exists := vds.vdById[id]; !exists {
 		return
 	}
-	vds.ingressRouter.RemoveOutboundChByID(id)
+	vds.ingressRouter.RemoveOutboundCh(id)
 	vds.vdById[id].Stop()
 	delete(vds.vdById, id)
 }
@@ -208,7 +208,7 @@ func (vds *VDS) DisconnectAndDeregisterDevice(ctx context.Context, id string) er
 
 // Start 启动vds服务
 func (vds *VDS) Start() {
-	log.Println("正在启动 vds ")
+	//log.Println("正在启动 vds ")
 	go vds.dispatcher.Run()
 	go vds.ingressRouter.Run()
 	go vds.readerLoop()
@@ -226,8 +226,11 @@ func (vds *VDS) Stop() {
 
 	vds.ingressRouter.Stop()
 	for id, vd := range vds.vdById {
-		_ = vds.DeregisterDeviceConn(context.Background(), id) // 尝试删除数据仓库中设备连接信息，删除失败也要停止本地goroutine
-		vd.Stop()
+		go func(id string, vd *virtualdevice.VirtualDevice) {
+			_ = vds.DeregisterDeviceConn(context.Background(), id) // 尝试删除数据仓库中设备连接信息，删除失败也要停止本地goroutine
+			vd.Stop()
+		}(id, vd)
+
 	}
 	vds.aggregator.Stop()
 	vds.dispatcher.Stop()

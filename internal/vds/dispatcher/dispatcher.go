@@ -33,7 +33,7 @@ func NewDispatcher(incomingCh <-chan message.Task, vdRepository repository.VDRep
 
 // Run 运行消息分发器, 创建工人并开始工作 (阻塞)
 func (d *Dispatcher) Run() {
-	log.Println("正在启动 dispatcher")
+	//log.Println("正在启动 dispatcher")
 	d.workerPool.Start(d.dispatch)
 	d.workerPool.Wait()
 }

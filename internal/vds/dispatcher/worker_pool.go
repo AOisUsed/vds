@@ -47,6 +47,7 @@ func (wp *WorkerPool) Start(handler func(task message.Task)) {
 }
 
 // Wait 等待所有worker完成任务再退出，在主线程中调用以防止worker协程未结束任务就因主线程退出被杀死
+//
 // 使用方法：
 //
 //		func main (){

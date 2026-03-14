@@ -22,24 +22,24 @@ func NewIngressRouter(inboundCh <-chan message.Message) *IngressRouter {
 	}
 }
 
-// CreateOutboundChByID  通过ID添加消息路由出口通道
-func (r *IngressRouter) CreateOutboundChByID(id string) <-chan message.Message {
+// CreateOutboundCh  通过ID添加消息路由出口通道
+func (r *IngressRouter) CreateOutboundCh(id string) <-chan message.Message {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.outboundChByID[id] = make(chan message.Message, 100) //设置大小为100的缓冲，应对下游暂时无法接收消息的情况
 	return r.outboundChByID[id]
 }
 
-// RemoveOutboundChByID  关闭通道，并通过ID删除路由信息
-func (r *IngressRouter) RemoveOutboundChByID(id string) {
+// RemoveOutboundCh  关闭通道，并通过ID删除路由信息
+func (r *IngressRouter) RemoveOutboundCh(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	close(r.outboundChByID[id])
 	delete(r.outboundChByID, id)
 }
 
-// OutChByID 通过vdID获得消息路由出口通道
-func (r *IngressRouter) OutChByID(id string) <-chan message.Message {
+// OutCh 通过vdID获得消息路由出口通道
+func (r *IngressRouter) OutCh(id string) <-chan message.Message {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.outboundChByID[id]
@@ -47,7 +47,7 @@ func (r *IngressRouter) OutChByID(id string) <-chan message.Message {
 
 // Run 运行入站路由
 func (r *IngressRouter) Run() {
-	log.Println("正在启动 ingress router")
+	//log.Println("正在启动 ingress router")
 	for {
 		select {
 		case <-r.stop:
@@ -70,7 +70,7 @@ func (r *IngressRouter) Stop() {
 		close(ch)
 		delete(r.outboundChByID, id)
 	}
-	log.Println("ingress router 停止")
+	//log.Println("ingress router 停止")
 }
 
 // Route 根据消息中dstID进行路由（简易实现）

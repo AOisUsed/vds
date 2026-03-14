@@ -3,11 +3,15 @@ package mock
 import (
 	"errors"
 	"io"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type Conn struct {
-	dataCh chan []byte
+	dataCh    chan []byte
+	closed    atomic.Bool // 原子标志，替代 sync.Once 的状态检查
+	closeOnce sync.Once   // 确保只关闭一次
 }
 
 func NewConn() *Conn {
@@ -17,6 +21,10 @@ func NewConn() *Conn {
 }
 
 func (c *Conn) Send(data []byte) error {
+	if c.closed.Load() {
+		return nil
+	}
+
 	select {
 	case c.dataCh <- data:
 		return nil
@@ -27,6 +35,19 @@ func (c *Conn) Send(data []byte) error {
 }
 
 func (c *Conn) Receive() ([]byte, error) {
+	if c.closed.Load() {
+		// 检查是否还有数据可读
+		select {
+		case data, ok := <-c.dataCh:
+			if !ok {
+				return nil, io.EOF
+			}
+			return data, nil
+		default:
+			return nil, io.EOF
+		}
+	}
+
 	select {
 	case data, ok := <-c.dataCh:
 		if !ok {
@@ -37,6 +58,8 @@ func (c *Conn) Receive() ([]byte, error) {
 }
 
 func (c *Conn) Close() error {
-	close(c.dataCh)
+	c.closeOnce.Do(func() {
+		c.closed.Store(true)
+	})
 	return nil
 }
