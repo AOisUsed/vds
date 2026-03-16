@@ -1,4 +1,4 @@
-package vds
+package domain
 
 import (
 	"context"
@@ -9,15 +9,15 @@ import (
 	"runtime"
 	"sync"
 	"time"
-	"virturalDevice/internal/vds/aggregator"
-	"virturalDevice/internal/vds/codec"
-	"virturalDevice/internal/vds/connection"
-	"virturalDevice/internal/vds/dispatcher"
-	"virturalDevice/internal/vds/ingressrouter"
-	"virturalDevice/internal/vds/message"
-	"virturalDevice/internal/vds/repository"
-	"virturalDevice/internal/vds/sender"
-	"virturalDevice/internal/vds/virtualdevice"
+	"virturalDevice/internal/vds/domain/aggregator"
+	"virturalDevice/internal/vds/domain/codec"
+	"virturalDevice/internal/vds/domain/connection"
+	"virturalDevice/internal/vds/domain/dispatcher"
+	"virturalDevice/internal/vds/domain/ingressrouter"
+	"virturalDevice/internal/vds/domain/message"
+	"virturalDevice/internal/vds/domain/repository"
+	"virturalDevice/internal/vds/domain/sender"
+	"virturalDevice/internal/vds/domain/virtualdevice"
 )
 
 type VDS struct {
@@ -111,8 +111,8 @@ func (vds *VDS) UpdateDeviceParams(ctx context.Context, id string) error {
 	return err
 }
 
-// RegisterDeviceConn 数据仓库中添加设备连接信息
-func (vds *VDS) RegisterDeviceConn(ctx context.Context, id string) error {
+// registerDeviceConn 数据仓库中添加设备连接信息
+func (vds *VDS) registerDeviceConn(ctx context.Context, id string) error {
 	err := vds.vdRepository.SetConnection(ctx, id, vds.conn)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -124,8 +124,8 @@ func (vds *VDS) RegisterDeviceConn(ctx context.Context, id string) error {
 	return err
 }
 
-// DeregisterDeviceConn 删除数据仓库中设备连接信息
-func (vds *VDS) DeregisterDeviceConn(ctx context.Context, id string) error {
+// deregisterDeviceConn 删除数据仓库中设备连接信息
+func (vds *VDS) deregisterDeviceConn(ctx context.Context, id string) error {
 	err := vds.vdRepository.RemoveConnection(ctx, id)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -137,7 +137,9 @@ func (vds *VDS) DeregisterDeviceConn(ctx context.Context, id string) error {
 	return err
 }
 
-// activateDevice vds中创建设备，与前后消息通道连接，并运行设备，如果同id的设备存在会删除原设备
+// activateDevice vds中创建设备，与前后消息通道连接，并运行设备。
+//
+// 如果同id的设备存在会删除原设备，替换为新设备
 func (vds *VDS) activateDevice(id string, opts ...virtualdevice.Option) {
 	vds.rwMutex.Lock()
 	defer vds.rwMutex.Unlock()
@@ -153,7 +155,9 @@ func (vds *VDS) activateDevice(id string, opts ...virtualdevice.Option) {
 	vds.vdById[id] = vd
 }
 
-// terminateDevice 停止并移除设备和及相关消息收发通道
+// terminateDevice 停止并移除设备和及相关消息收发通道。
+//
+// 多次调用，则第一次调用后都是无操作
 func (vds *VDS) terminateDevice(id string) {
 	vds.rwMutex.Lock()
 	defer vds.rwMutex.Unlock()
@@ -173,7 +177,7 @@ func (vds *VDS) ActivateAndRegisterDevice(ctx context.Context, id string, opts .
 	vds.activateDevice(id, opts...)
 
 	// 注册设备到数据仓库中
-	err := vds.RegisterDeviceConn(ctx, id)
+	err := vds.registerDeviceConn(ctx, id)
 	if err != nil {
 		// 失败则回滚
 		vds.terminateDevice(id)
@@ -186,7 +190,7 @@ func (vds *VDS) ActivateAndRegisterDevice(ctx context.Context, id string, opts .
 // TerminateAndDeregisterDevice 停止，断开vd设备，并删除数据库中设备连接信息
 func (vds *VDS) TerminateAndDeregisterDevice(ctx context.Context, id string) error {
 
-	err := vds.DeregisterDeviceConn(ctx, id)
+	err := vds.deregisterDeviceConn(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -227,7 +231,7 @@ func (vds *VDS) Stop() {
 	vds.ingressRouter.Stop()
 	for id, vd := range vds.vdById {
 		go func(id string, vd *virtualdevice.VirtualDevice) {
-			_ = vds.DeregisterDeviceConn(context.Background(), id) // 尝试删除数据仓库中设备连接信息，删除失败也要停止本地goroutine
+			_ = vds.deregisterDeviceConn(context.Background(), id) // 尝试删除数据仓库中设备连接信息，删除失败也要停止本地goroutine
 			vd.Stop()
 		}(id, vd)
 

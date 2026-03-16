@@ -3,9 +3,10 @@ package virtualdevice
 import (
 	"context"
 	"log"
-	"virturalDevice/internal/vds/message"
-	"virturalDevice/internal/vds/virtualdevice/cipher"
-	"virturalDevice/internal/vds/virtualdevice/params"
+	"sync"
+	"virturalDevice/internal/vds/domain/message"
+	"virturalDevice/internal/vds/domain/virtualdevice/cipher"
+	"virturalDevice/internal/vds/domain/virtualdevice/params"
 )
 
 // VirtualDevice 虚拟通信设备，默认操作是单线程，并发不安全
@@ -16,8 +17,12 @@ type VirtualDevice struct {
 	sendCh    chan message.Task      // 消息任务发送通道
 	params    params.Params          // 设备参数
 
+	subscriptionCh chan message.Message // 暴露给外部的观察设备接收消息的通道
+
 	cancelMessaging context.CancelFunc // 取消消息发送函数
 	stop            chan struct{}      // 停止工作信号通道
+
+	rwMu sync.RWMutex
 }
 
 type Option func(*VirtualDevice)
@@ -41,6 +46,8 @@ func NewVirtualDevice(id string, receiveCh <-chan message.Message, opts ...Optio
 		sendCh:    make(chan message.Task, 50), // 缓存大小可以根据实际情况调整，暂时设为50
 		stop:      make(chan struct{}),
 
+		subscriptionCh: make(chan message.Message),
+
 		cipher: cipher.NewPlain(), // 默认明文密码机
 		params: params.NewEmpty(), // 默认空白参数
 	}
@@ -54,6 +61,8 @@ func NewVirtualDevice(id string, receiveCh <-chan message.Message, opts ...Optio
 
 // Params 设备参数
 func (vd *VirtualDevice) Params() params.Params {
+	vd.rwMu.RLock()
+	defer vd.rwMu.RUnlock()
 	return vd.params
 }
 
@@ -62,10 +71,13 @@ func (vd *VirtualDevice) OutChan() <-chan message.Task {
 	return vd.sendCh
 }
 
-// Send 虚拟设备发出消息 (非并发安全)
+// SendMessage 虚拟设备发出消息
 //
 // dstId 为空进行广播，不为空进行单播
-func (vd *VirtualDevice) Send(dstId string, body []byte) {
+func (vd *VirtualDevice) SendMessage(dstId string, body []byte) {
+	vd.rwMu.Lock()
+	defer vd.rwMu.Unlock()
+
 	if dstId == "" {
 		log.Printf("虚拟设备 %v 正在广播消息\n", vd.id)
 	} else {
@@ -93,11 +105,22 @@ func (vd *VirtualDevice) Send(dstId string, body []byte) {
 
 // CancelSend 取消发送当前正在发送的消息 (非并发安全)
 func (vd *VirtualDevice) CancelSend() {
+	vd.rwMu.Lock()
+	defer vd.rwMu.Unlock()
+
 	if vd.cancelMessaging != nil {
 		vd.cancelMessaging()
 	} else {
 		log.Printf("虚拟设备 %v 当前无正在发送的消息，无法取消\n", vd.id)
 	}
+}
+
+// SubscribeMessage 订阅
+func (vd *VirtualDevice) SubscribeMessage() <-chan message.Message {
+	vd.rwMu.RLock()
+	defer vd.rwMu.RUnlock()
+
+	return vd.subscriptionCh
 }
 
 // Run 运行虚拟设备，接收消息，打印到控制台，生命周期由上游关闭通道结束
@@ -121,6 +144,12 @@ func (vd *VirtualDevice) Run() {
 			}
 			// 打印消息内容
 			log.Printf("虚拟设备 %v 收到消息，内容是：%q\n", vd.id, bodyDecrypted)
+
+			// 把消息转送给接收消息的订阅者(如接收消息的前端)，无人观察则直接丢弃消息
+			select {
+			case vd.subscriptionCh <- incomingMessage:
+			default:
+			}
 		}
 	}
 }

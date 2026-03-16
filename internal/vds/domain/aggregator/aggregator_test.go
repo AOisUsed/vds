@@ -5,7 +5,7 @@ import (
 	"log"
 	"strconv"
 	"testing"
-	"virturalDevice/internal/vds/message"
+	"virturalDevice/internal/vds/domain/message"
 )
 
 func TestAggregatorBasicLifeCycle(t *testing.T) {

@@ -1,11 +1,9 @@
-package mock
+package connection
 
 import (
-	"errors"
 	"io"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type Conn struct {
@@ -28,8 +26,8 @@ func (c *Conn) Send(data []byte) error {
 	select {
 	case c.dataCh <- data:
 		return nil
-	case <-time.After(time.Millisecond * 300):
-		return errors.New("连接阻塞无法发送消息")
+		//case <-time.After(time.Millisecond * 300):
+		//	return errors.New("连接阻塞无法发送消息")
 	}
 
 }

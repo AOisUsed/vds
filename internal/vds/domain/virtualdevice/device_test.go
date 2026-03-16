@@ -6,14 +6,14 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"virturalDevice/internal/mock"
-	"virturalDevice/internal/vds/message"
+	"virturalDevice/internal/vds/domain/message"
+	"virturalDevice/internal/vds/infrastructure/model"
 )
 
 func TestDeviceSend(t *testing.T) {
 
 	inCh := make(chan message.Message)
-	dv := NewVirtualDevice("1", inCh, WithParams(mock.NewRadioParams()))
+	dv := NewVirtualDevice("1", inCh, WithParams(model.NewRadioParams()))
 
 	outCh := dv.OutChan()
 
@@ -29,9 +29,9 @@ func TestDeviceSend(t *testing.T) {
 		}
 	}()
 
-	dv.Send("2", []byte("hello"))
-	dv.Send("3", []byte("world"))
-	dv.Send("4", []byte("!!"))
+	dv.SendMessage("2", []byte("hello"))
+	dv.SendMessage("3", []byte("world"))
+	dv.SendMessage("4", []byte("!!"))
 	//dv.CancelSend()
 
 	time.Sleep(3 * time.Second)
@@ -42,7 +42,7 @@ func TestDeviceSend(t *testing.T) {
 func TestDeviceReceive(t *testing.T) {
 
 	inCh := make(chan message.Message)
-	dv := NewVirtualDevice("1", inCh, WithParams(mock.NewRadioParams()))
+	dv := NewVirtualDevice("1", inCh, WithParams(model.NewRadioParams()))
 	go dv.Run()
 
 	for i := 0; i < 10; i++ {

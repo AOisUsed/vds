@@ -1,4 +1,4 @@
-package mock
+package repository
 
 import (
 	"context"
@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"virturalDevice/internal/vds/connection"
-	"virturalDevice/internal/vds/repository"
-	"virturalDevice/internal/vds/virtualdevice/params"
+	"virturalDevice/internal/vds/domain/connection"
+	"virturalDevice/internal/vds/domain/repository"
+	"virturalDevice/internal/vds/domain/virtualdevice/params"
 )
 
 // Repository 测试用模拟vdRepo

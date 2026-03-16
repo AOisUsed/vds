@@ -1,7 +1,7 @@
 package codec
 
 import (
-	"virturalDevice/internal/vds/message"
+	"virturalDevice/internal/vds/domain/message"
 )
 
 type Codec interface {

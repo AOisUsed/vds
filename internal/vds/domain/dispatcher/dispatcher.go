@@ -5,10 +5,10 @@ import (
 	"errors"
 	"log"
 	"sync"
-	"virturalDevice/internal/vds/codec"
-	"virturalDevice/internal/vds/message"
-	"virturalDevice/internal/vds/repository"
-	"virturalDevice/internal/vds/sender"
+	"virturalDevice/internal/vds/domain/codec"
+	"virturalDevice/internal/vds/domain/message"
+	"virturalDevice/internal/vds/domain/repository"
+	"virturalDevice/internal/vds/domain/sender"
 )
 
 // Dispatcher 消息分发器

@@ -1,4 +1,4 @@
-package vds
+package domain
 
 import (
 	"context"
@@ -10,18 +10,22 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"virturalDevice/internal/mock"
-	"virturalDevice/internal/vds/virtualdevice"
+	"virturalDevice/internal/vds/domain/virtualdevice"
+	"virturalDevice/internal/vds/infrastructure/codec"
+	"virturalDevice/internal/vds/infrastructure/connection"
+	"virturalDevice/internal/vds/infrastructure/model"
+	"virturalDevice/internal/vds/infrastructure/repository"
+	"virturalDevice/internal/vds/infrastructure/transport"
 	"virturalDevice/utils"
 )
 
 // 单机使用vds (repo仅在此vds中)
 func NewMockVDS() *VDS {
-	conn := mock.NewConn()
-	repo := mock.NewVDRepository(time.Millisecond * 600)
-	sender := mock.NewSender()
-	codec := mock.NewCodec()
-	return NewVDS(conn, repo, sender, codec)
+	conn := connection.NewConn()
+	repo := repository.NewVDRepository(time.Millisecond * 600)
+	sender := transport.NewSender()
+	jsonCodec := codec.NewCodec()
+	return NewVDS(conn, repo, sender, jsonCodec)
 }
 
 func TestBasicLifeCycle(t *testing.T) {
@@ -43,7 +47,7 @@ func TestBasicRegisterDevice(t *testing.T) {
 	// 模拟成功注册
 	fmt.Println("\n 模拟注册")
 	ctx := context.Background()
-	err := vds.RegisterDeviceConn(ctx, "1")
+	err := vds.registerDeviceConn(ctx, "1")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -60,7 +64,7 @@ func TestBasicRegisterDevice(t *testing.T) {
 		cancel()
 	}()
 
-	err = vds.RegisterDeviceConn(ctxWithCancel, "2")
+	err = vds.registerDeviceConn(ctxWithCancel, "2")
 
 	if err != nil {
 		log.Println(err.Error())
@@ -89,7 +93,7 @@ func TestConcurrentRegisterDevice(t *testing.T) {
 		registerWg.Add(1)
 		go func() {
 			defer registerWg.Done()
-			_ = vds.RegisterDeviceConn(context.Background(), strconv.Itoa(i))
+			_ = vds.registerDeviceConn(context.Background(), strconv.Itoa(i))
 		}()
 	}
 
@@ -110,7 +114,7 @@ func TestConcurrentDeregisterDevice(t *testing.T) {
 
 	// 注册15个设备
 	for i := 0; i < 15; i++ {
-		_ = vds.RegisterDeviceConn(context.Background(), strconv.Itoa(i))
+		_ = vds.registerDeviceConn(context.Background(), strconv.Itoa(i))
 	}
 	fmt.Printf("已完成设备注册\n\n")
 
@@ -128,7 +132,7 @@ func TestConcurrentDeregisterDevice(t *testing.T) {
 
 		go func() {
 			defer deregisterWg.Done()
-			_ = vds.DeregisterDeviceConn(ctxWithCancel, strconv.Itoa(i))
+			_ = vds.deregisterDeviceConn(ctxWithCancel, strconv.Itoa(i))
 		}()
 	}
 
@@ -154,7 +158,7 @@ func TestConcurrentRegisterDeregisterDevice(t *testing.T) {
 		regDeregWg.Add(1)
 		go func() {
 			defer regDeregWg.Done()
-			_ = vds.RegisterDeviceConn(context.Background(), strconv.Itoa(i))
+			_ = vds.registerDeviceConn(context.Background(), strconv.Itoa(i))
 		}()
 	}
 
@@ -163,7 +167,7 @@ func TestConcurrentRegisterDeregisterDevice(t *testing.T) {
 		regDeregWg.Add(1)
 		go func() {
 			defer regDeregWg.Done()
-			_ = vds.DeregisterDeviceConn(context.Background(), strconv.Itoa(i))
+			_ = vds.deregisterDeviceConn(context.Background(), strconv.Itoa(i))
 		}()
 	}
 
@@ -182,14 +186,14 @@ func TestBasicCommunication(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// vds1, vds2 公用的repository (临时使用)
-	repo := mock.NewVDRepository(time.Millisecond * 1)
+	repo := repository.NewVDRepository(time.Millisecond * 1)
 	// 创造并启动 vds1
-	vds1 := NewVDS(mock.NewConn(), repo, mock.NewSender(), mock.NewCodec())
+	vds1 := NewVDS(connection.NewConn(), repo, transport.NewSender(), codec.NewCodec())
 	wg.Add(1)
 	vds1.Start()
 
 	// 创造并启动 vds2
-	vds2 := NewVDS(mock.NewConn(), repo, mock.NewSender(), mock.NewCodec())
+	vds2 := NewVDS(connection.NewConn(), repo, transport.NewSender(), codec.NewCodec())
 	wg.Add(1)
 	vds2.Start()
 
@@ -224,16 +228,16 @@ func TestBasicCommunication(t *testing.T) {
 	}
 
 	// 设备1 给 设备2 发送消息
-	vds1.Device("1").Send("2", []byte("message 1->2"))
+	vds1.Device("1").SendMessage("2", []byte("message 1->2"))
 
 	// 设备2 给 设备1 发送消息
-	vds2.Device("2").Send("1", []byte("message 2->1"))
+	vds2.Device("2").SendMessage("1", []byte("message 2->1"))
 
 	// 设备1 发出广播
-	vds1.Device("1").Send("", []byte("1发出的广播"))
+	vds1.Device("1").SendMessage("", []byte("1发出的广播"))
 
 	// 设备2 发出广播
-	vds2.Device("2").Send("", []byte("2发出的广播"))
+	vds2.Device("2").SendMessage("", []byte("2发出的广播"))
 
 	time.Sleep(2 * time.Second)
 
@@ -252,12 +256,12 @@ func TestConcurrentCommunication(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// 公用的repository (临时使用)
-	repo := mock.NewVDRepository(time.Millisecond * 600)
+	repo := repository.NewVDRepository(time.Millisecond * 600)
 
 	// 创造并启动数个vds
 	var vdss []*VDS
-	for i := 0; i < 5; i++ {
-		vdss = append(vdss, NewVDS(mock.NewConn(), repo, mock.NewSender(), mock.NewCodec()))
+	for i := 0; i < 10; i++ {
+		vdss = append(vdss, NewVDS(connection.NewConn(), repo, transport.NewSender(), codec.NewCodec()))
 		wg.Add(1)
 		vdss[i].Start()
 	}
@@ -266,7 +270,7 @@ func TestConcurrentCommunication(t *testing.T) {
 
 	for _, vds := range vdss {
 		// 每个 vds 中产生数个 vd
-		numVD := rand.Int() % 50
+		numVD := rand.Int() % 500
 		//numVD := 5
 		// 每个 vds 并发产生多个 vd,并发送消息
 		go func(vds *VDS) {
@@ -281,9 +285,9 @@ func TestConcurrentCommunication(t *testing.T) {
 
 					dstId := rand.Int() % idg.Max()
 					if dstId%3 != 0 {
-						vds.Device(id).Send(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
+						vds.Device(id).SendMessage(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
 					} else {
-						vds.Device(id).Send("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
+						vds.Device(id).SendMessage("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
 					}
 
 				}(vds)
@@ -292,7 +296,7 @@ func TestConcurrentCommunication(t *testing.T) {
 	}
 
 	// 等待发送完成
-	time.Sleep(5 * time.Second)
+	time.Sleep(20 * time.Second)
 	fmt.Println("\n 即将开始关闭vds")
 	// 停止 vds
 	for _, vds := range vdss {
@@ -309,12 +313,12 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// 公用的repository (临时使用)
-	repo := mock.NewVDRepository(time.Millisecond * 20)
+	repo := repository.NewVDRepository(time.Millisecond * 20)
 
 	// 创造并启动数个vds
 	var vdss []*VDS
 	for i := 0; i < 2; i++ {
-		vdss = append(vdss, NewVDS(mock.NewConn(), repo, mock.NewSender(), mock.NewCodec()))
+		vdss = append(vdss, NewVDS(connection.NewConn(), repo, transport.NewSender(), codec.NewCodec()))
 		wg.Add(1)
 		vdss[i].Start()
 	}
@@ -331,7 +335,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 					mode := j % 3
 					err := vds.ActivateAndRegisterDevice(context.Background(), id,
 						virtualdevice.WithParams(
-							mock.NewRadioParams(mock.WithMode(mode)), // todo：还没写完
+							model.NewRadioParams(model.WithMode(mode)), // todo：还没写完
 						),
 					)
 					if err != nil {
@@ -342,9 +346,9 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 
 					dstId := rand.Int() % idg.Max()
 					if dstId%3 == 0 {
-						vds.Device(id).Send(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
+						vds.Device(id).SendMessage(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
 					} else {
-						vds.Device(id).Send("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
+						vds.Device(id).SendMessage("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
 					}
 
 				}(vds, j)

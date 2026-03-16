@@ -1,7 +1,7 @@
-package mock
+package transport
 
 import (
-	"virturalDevice/internal/vds/connection"
+	"virturalDevice/internal/vds/domain/connection"
 )
 
 // Sender 只发送一次，不进行任何处理的sender

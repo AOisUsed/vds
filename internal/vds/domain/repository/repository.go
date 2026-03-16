@@ -2,8 +2,8 @@ package repository
 
 import (
 	"context"
-	"virturalDevice/internal/vds/connection"
-	"virturalDevice/internal/vds/virtualdevice/params"
+	"virturalDevice/internal/vds/domain/connection"
+	"virturalDevice/internal/vds/domain/virtualdevice/params"
 )
 
 // VDRepository 虚拟设备相关数据仓库接口

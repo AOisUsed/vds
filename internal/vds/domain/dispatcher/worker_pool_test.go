@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
-	"virturalDevice/internal/vds/message"
+	"virturalDevice/internal/vds/domain/message"
 )
 
 // 测试使用Stop()来停止

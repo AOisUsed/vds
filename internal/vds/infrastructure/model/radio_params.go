@@ -1,7 +1,7 @@
-package mock
+package model
 
 import (
-	"virturalDevice/internal/vds/virtualdevice/params"
+	"virturalDevice/internal/vds/domain/virtualdevice/params"
 )
 
 type RadioParams struct {
