@@ -66,6 +66,13 @@ func (vd *VirtualDevice) Params() params.Params {
 	return vd.params
 }
 
+// UpdateParams 更新设备参数
+func (vd *VirtualDevice) UpdateParams(params params.Params) {
+	vd.rwMu.Lock()
+	defer vd.rwMu.Unlock()
+	vd.params = params
+}
+
 // OutChan 获取消息任务发送出口
 func (vd *VirtualDevice) OutChan() <-chan message.Task {
 	return vd.sendCh

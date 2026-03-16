@@ -18,6 +18,7 @@ import (
 	"virturalDevice/internal/vds/domain/repository"
 	"virturalDevice/internal/vds/domain/sender"
 	"virturalDevice/internal/vds/domain/virtualdevice"
+	"virturalDevice/internal/vds/domain/virtualdevice/params"
 )
 
 type VDS struct {
@@ -40,6 +41,9 @@ type VDS struct {
 	// 编解码器
 	codec codec.Codec
 
+	// 设备状态同步
+	paramsSyncerById map[string]chan struct{} // 设备参数同步
+
 	rwMutex   sync.RWMutex
 	startOnce sync.Once
 	stopOnce  sync.Once
@@ -48,12 +52,13 @@ type VDS struct {
 // NewVDS 初始化VDS(无设备)
 func NewVDS(conn connection.Connection, repo repository.VDRepository, sender sender.Sender, codec codec.Codec) *VDS {
 	vds := &VDS{
-		vdById:       make(map[string]*virtualdevice.VirtualDevice),
-		conn:         conn,
-		incomingCh:   make(chan message.Message, 100), // 设置100的缓存
-		vdRepository: repo,
-		sender:       sender,
-		codec:        codec,
+		vdById:           make(map[string]*virtualdevice.VirtualDevice),
+		conn:             conn,
+		incomingCh:       make(chan message.Message, 100), // 设置100的缓存
+		vdRepository:     repo,
+		sender:           sender,
+		codec:            codec,
+		paramsSyncerById: make(map[string]chan struct{}),
 	}
 	vds.ingressRouter = ingressrouter.NewIngressRouter(vds.incomingCh)
 	vds.aggregator = aggregator.NewAggregator()
@@ -101,20 +106,55 @@ func (vds *VDS) listenConnection() {
 	}
 }
 
-// SyncDeviceParams 把设备参数同步到数据仓库中
-func (vds *VDS) SyncDeviceParams(ctx context.Context, id string) error {
+// SubscribeDeviceMessage 订阅某个设备的消息接收
+//
+// 点对点模式：多个订阅者竞争消息接收，无法共享
+func (vds *VDS) SubscribeDeviceMessage(id string) (<-chan message.Message, error) {
 	vds.rwMutex.RLock()
+	defer vds.rwMutex.RUnlock()
 
+	vd, ok := vds.vdById[id]
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("vds中无此设备%v，无法订阅消息", id))
+	}
+	msgCh := vd.SubscribeMessage()
+	return msgCh, nil
+}
+
+// syncDeviceParams 把设备参数同步到数据仓库中 (并发不安全)
+func (vds *VDS) syncDeviceParams(ctx context.Context, id string) error {
 	vd, ok := vds.vdById[id]
 	if !ok {
 		vds.rwMutex.RUnlock()
 		return errors.New(fmt.Sprintf("vds中无设备%v", id))
 	}
-	vds.rwMutex.RUnlock()
 
-	params := vd.Params()
-	err := vds.vdRepository.SetParams(ctx, id, params)
+	parameters := vd.Params()
+	err := vds.vdRepository.SetParams(ctx, id, parameters)
 	return err
+}
+
+// updateDeviceParams 更新设备参数 (仅内存中更新,不同步到数据仓库) (并发不安全)
+func (vds *VDS) updateDeviceParams(id string, params params.Params) error {
+	vd, ok := vds.vdById[id]
+	if !ok {
+		return errors.New(fmt.Sprintf("vds中无此设备%v，无法更新参数", id))
+	}
+	vd.UpdateParams(params)
+	return nil
+}
+
+func (vds *VDS) updateAndSyncParams(id string, params params.Params) error {
+	vds.rwMutex.RLock()
+	defer vds.rwMutex.RUnlock()
+
+	// 本地设备内更新参数
+	err := vds.updateDeviceParams(id, params)
+	if err != nil {
+		return err
+	}
+	// 交给upda
+
 }
 
 // registerDeviceConn 数据仓库中添加设备连接信息
@@ -176,7 +216,34 @@ func (vds *VDS) terminateDevice(id string) {
 	delete(vds.vdById, id)
 }
 
-// ActivateAndRegisterDevice 连接并注册设备连接信息到数据库中
+func (vds *VDS) runParamsSyncer(id string) {
+	// 创建 参数同步处理器
+	vds.rwMutex.Lock()
+	if _, exists := vds.paramsSyncerById[id]; exists {
+		return
+	}
+
+	devId := id
+	paramsSyncer := make(chan struct{}, 1)
+	vds.paramsSyncerById[id] = paramsSyncer
+	vds.rwMutex.Unlock()
+
+	// 运行 参数同步处理器
+	for range paramsSyncer {
+		err := vds.syncDeviceParams(context.Background(), devId)
+		if err != nil {
+			// 如果失败，重试
+			select {
+			case paramsSyncer <- struct{}{}:
+			default:
+			}
+			continue
+		}
+	}
+
+}
+
+// ActivateAndRegisterDevice 连接并注册设备连接信息到数据库中,更新
 func (vds *VDS) ActivateAndRegisterDevice(ctx context.Context, id string, opts ...virtualdevice.Option) error {
 
 	// 创建并运行设备
@@ -189,6 +256,7 @@ func (vds *VDS) ActivateAndRegisterDevice(ctx context.Context, id string, opts .
 		vds.terminateDevice(id)
 		return err
 	}
+
 	log.Printf("注册设备%v连接信息成功\n", id)
 	return nil
 }

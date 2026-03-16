@@ -203,7 +203,7 @@ func TestBasicCommunication(t *testing.T) {
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds1.SyncDeviceParams(context.Background(), "1")
+	err = vds1.syncDeviceParams(context.Background(), "1")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -213,7 +213,7 @@ func TestBasicCommunication(t *testing.T) {
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds2.SyncDeviceParams(context.Background(), "2")
+	err = vds2.syncDeviceParams(context.Background(), "2")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -223,7 +223,7 @@ func TestBasicCommunication(t *testing.T) {
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds2.SyncDeviceParams(context.Background(), "3")
+	err = vds2.syncDeviceParams(context.Background(), "3")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -277,7 +277,7 @@ func TestConcurrentCommunication(t *testing.T) {
 
 	// 创造并启动数个vds
 	var vdss []*VDS
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		vdss = append(vdss, NewVDS(connection.NewConn(), repo, transport.NewSender(), codec.NewCodec()))
 		wg.Add(1)
 		vdss[i].Start()
@@ -287,7 +287,7 @@ func TestConcurrentCommunication(t *testing.T) {
 
 	for _, vds := range vdss {
 		// 每个 vds 中产生数个 vd
-		numVD := rand.Int() % 500
+		numVD := rand.Int() % 100
 		//numVD := 5
 		// 每个 vds 并发产生多个 vd,并发送消息
 		go func(vds *VDS) {
@@ -298,7 +298,7 @@ func TestConcurrentCommunication(t *testing.T) {
 					if err != nil {
 						log.Println(err.Error())
 					}
-					err = vds.SyncDeviceParams(context.Background(), id)
+					err = vds.syncDeviceParams(context.Background(), id)
 
 					dstId := rand.Int() % idg.Max()
 					if dstId%3 != 0 {
@@ -367,7 +367,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 						log.Println(err.Error())
 					}
 					log.Printf("设备%v的mode是%v\n", id, mode)
-					err = vds.SyncDeviceParams(context.Background(), id)
+					err = vds.syncDeviceParams(context.Background(), id)
 
 					dstId := rand.Int() % idg.Max()
 					if dstId%3 != 0 {
@@ -389,7 +389,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 		}(vds)
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	// 停止 vds
 	for _, vds := range vdss {
