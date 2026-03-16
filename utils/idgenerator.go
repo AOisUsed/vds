@@ -1,10 +1,11 @@
-package vds
+package utils
 
 import (
 	"fmt"
 	"sync"
 )
 
+// IdGenerator 可以从0开始产生递增的id
 type IdGenerator struct {
 	max int
 	mu  sync.Mutex

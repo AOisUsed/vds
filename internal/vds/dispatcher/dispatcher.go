@@ -6,9 +6,9 @@ import (
 	"log"
 	"sync"
 	"virturalDevice/internal/vds/codec"
+	"virturalDevice/internal/vds/message"
 	"virturalDevice/internal/vds/repository"
 	"virturalDevice/internal/vds/sender"
-	"virturalDevice/internal/vds/virtualdevice/message"
 )
 
 // Dispatcher 消息分发器
@@ -56,7 +56,7 @@ func (d *Dispatcher) dispatch(messagingTask message.Task) {
 		if msg.DstID != "" {
 			d.dispatchUnicast(ctx, msg)
 		} else {
-			d.dispatchMulticast(ctx, msg)
+			d.dispatchBroadcast(ctx, msg)
 		}
 	}
 }
@@ -96,8 +96,8 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 	}
 }
 
-// dispatchUnicast 分发多播消息（消息无明确目标地址的情况）
-func (d *Dispatcher) dispatchMulticast(ctx context.Context, msg message.Message) {
+// dispatchUnicast 分发广播消息（消息无明确目标地址的情况）
+func (d *Dispatcher) dispatchBroadcast(ctx context.Context, msg message.Message) {
 	// 找到所有可达设备
 	dstIDs, err := d.FindValidTargetVDs(ctx, msg.SrcID)
 	if err != nil && !errors.Is(err, context.Canceled) {

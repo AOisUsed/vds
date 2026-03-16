@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 	"virturalDevice/internal/mock"
-	"virturalDevice/internal/vds/virtualdevice/message"
+	"virturalDevice/internal/vds/message"
 )
 
 func TestDeviceSend(t *testing.T) {

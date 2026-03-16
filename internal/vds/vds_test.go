@@ -12,6 +12,7 @@ import (
 	"time"
 	"virturalDevice/internal/mock"
 	"virturalDevice/internal/vds/virtualdevice"
+	"virturalDevice/utils"
 )
 
 // 单机使用vds (repo仅在此vds中)
@@ -193,7 +194,7 @@ func TestBasicCommunication(t *testing.T) {
 	vds2.Start()
 
 	// vds1 中注册设备1连接信息，更新设备参数
-	err := vds1.ConnectAndRegisterDevice(context.Background(), "1")
+	err := vds1.ActivateAndRegisterDevice(context.Background(), "1")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -203,7 +204,7 @@ func TestBasicCommunication(t *testing.T) {
 	}
 
 	// vds2 中注册设备2连接信息，更新设备参数
-	err = vds2.ConnectAndRegisterDevice(context.Background(), "2")
+	err = vds2.ActivateAndRegisterDevice(context.Background(), "2")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -213,7 +214,7 @@ func TestBasicCommunication(t *testing.T) {
 	}
 
 	// vds2 中注册设备3连接信息，更新设备参数
-	err = vds2.ConnectAndRegisterDevice(context.Background(), "3")
+	err = vds2.ActivateAndRegisterDevice(context.Background(), "3")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -261,7 +262,7 @@ func TestConcurrentCommunication(t *testing.T) {
 		vdss[i].Start()
 	}
 
-	idg := NewIdGenerator()
+	idg := utils.NewIdGenerator()
 
 	for _, vds := range vdss {
 		// 每个 vds 中产生数个 vd
@@ -272,7 +273,7 @@ func TestConcurrentCommunication(t *testing.T) {
 			for j := 0; j < numVD; j++ {
 				id := idg.Next()
 				go func(vds *VDS) {
-					err := vds.ConnectAndRegisterDevice(context.Background(), id)
+					err := vds.ActivateAndRegisterDevice(context.Background(), id)
 					if err != nil {
 						log.Println(err.Error())
 					}
@@ -318,7 +319,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 		vdss[i].Start()
 	}
 
-	idg := NewIdGenerator()
+	idg := utils.NewIdGenerator()
 	for _, vds := range vdss {
 		// 每个 vds 中产生数个 vd
 		numVD := rand.Int() % 6
@@ -328,7 +329,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 				id := idg.Next()
 				go func(vds *VDS, j int) {
 					mode := j % 3
-					err := vds.ConnectAndRegisterDevice(context.Background(), id,
+					err := vds.ActivateAndRegisterDevice(context.Background(), id,
 						virtualdevice.WithParams(
 							mock.NewRadioParams(mock.WithMode(mode)), // todo：还没写完
 						),

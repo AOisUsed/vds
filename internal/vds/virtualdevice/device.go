@@ -3,8 +3,8 @@ package virtualdevice
 import (
 	"context"
 	"log"
+	"virturalDevice/internal/vds/message"
 	"virturalDevice/internal/vds/virtualdevice/cipher"
-	"virturalDevice/internal/vds/virtualdevice/message"
 	"virturalDevice/internal/vds/virtualdevice/params"
 )
 
@@ -63,6 +63,8 @@ func (vd *VirtualDevice) OutChan() <-chan message.Task {
 }
 
 // Send 虚拟设备发出消息 (非并发安全)
+//
+// dstId 为空进行广播，不为空进行单播
 func (vd *VirtualDevice) Send(dstId string, body []byte) {
 	if dstId == "" {
 		log.Printf("虚拟设备 %v 正在广播消息\n", vd.id)
@@ -93,8 +95,9 @@ func (vd *VirtualDevice) Send(dstId string, body []byte) {
 func (vd *VirtualDevice) CancelSend() {
 	if vd.cancelMessaging != nil {
 		vd.cancelMessaging()
+	} else {
+		log.Printf("虚拟设备 %v 当前无正在发送的消息，无法取消\n", vd.id)
 	}
-	log.Printf("虚拟设备 %v 当前无正在发送的消息，无法取消\n", vd.id)
 }
 
 // Run 运行虚拟设备，接收消息，打印到控制台，生命周期由上游关闭通道结束

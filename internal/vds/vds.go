@@ -14,10 +14,10 @@ import (
 	"virturalDevice/internal/vds/connection"
 	"virturalDevice/internal/vds/dispatcher"
 	"virturalDevice/internal/vds/ingressrouter"
+	"virturalDevice/internal/vds/message"
 	"virturalDevice/internal/vds/repository"
 	"virturalDevice/internal/vds/sender"
 	"virturalDevice/internal/vds/virtualdevice"
-	"virturalDevice/internal/vds/virtualdevice/message"
 )
 
 type VDS struct {
@@ -70,8 +70,8 @@ func (vds *VDS) Device(id string) *virtualdevice.VirtualDevice {
 	return v
 }
 
-// readerLoop 持续从连接读取数据
-func (vds *VDS) readerLoop() {
+// listenConnection 持续从连接读取数据并处理
+func (vds *VDS) listenConnection() {
 	defer close(vds.incomingCh)
 
 	for {
@@ -137,13 +137,13 @@ func (vds *VDS) DeregisterDeviceConn(ctx context.Context, id string) error {
 	return err
 }
 
-// connectDevice vds中创建设备，与前后消息通道连接，并运行设备，如果同id的设备存在会删除原设备
-func (vds *VDS) connectDevice(id string, opts ...virtualdevice.Option) {
+// activateDevice vds中创建设备，与前后消息通道连接，并运行设备，如果同id的设备存在会删除原设备
+func (vds *VDS) activateDevice(id string, opts ...virtualdevice.Option) {
 	vds.rwMutex.Lock()
 	defer vds.rwMutex.Unlock()
 
 	if _, exists := vds.vdById[id]; exists {
-		vds.disconnectDevice(id)
+		vds.terminateDevice(id)
 	}
 	routerOutCh := vds.ingressRouter.CreateOutboundCh(id)
 	vd := virtualdevice.NewVirtualDevice(id, routerOutCh, opts...)
@@ -153,8 +153,8 @@ func (vds *VDS) connectDevice(id string, opts ...virtualdevice.Option) {
 	vds.vdById[id] = vd
 }
 
-// disconnectDevice 停止并移除设备和及相关消息收发通道
-func (vds *VDS) disconnectDevice(id string) {
+// terminateDevice 停止并移除设备和及相关消息收发通道
+func (vds *VDS) terminateDevice(id string) {
 	vds.rwMutex.Lock()
 	defer vds.rwMutex.Unlock()
 
@@ -166,32 +166,32 @@ func (vds *VDS) disconnectDevice(id string) {
 	delete(vds.vdById, id)
 }
 
-// ConnectAndRegisterDevice 连接并注册设备连接信息到数据库中
-func (vds *VDS) ConnectAndRegisterDevice(ctx context.Context, id string, opts ...virtualdevice.Option) error {
+// ActivateAndRegisterDevice 连接并注册设备连接信息到数据库中
+func (vds *VDS) ActivateAndRegisterDevice(ctx context.Context, id string, opts ...virtualdevice.Option) error {
 
 	// 创建并运行设备
-	vds.connectDevice(id, opts...)
+	vds.activateDevice(id, opts...)
 
 	// 注册设备到数据仓库中
 	err := vds.RegisterDeviceConn(ctx, id)
 	if err != nil {
 		// 失败则回滚
-		vds.disconnectDevice(id)
+		vds.terminateDevice(id)
 		return err
 	}
 	log.Printf("注册设备%v连接信息成功\n", id)
 	return nil
 }
 
-// DisconnectAndDeregisterDevice 停止，断开vd设备，并删除数据库中设备连接信息
-func (vds *VDS) DisconnectAndDeregisterDevice(ctx context.Context, id string) error {
+// TerminateAndDeregisterDevice 停止，断开vd设备，并删除数据库中设备连接信息
+func (vds *VDS) TerminateAndDeregisterDevice(ctx context.Context, id string) error {
 
 	err := vds.DeregisterDeviceConn(ctx, id)
 	if err != nil {
 		return err
 	}
 	log.Printf("删除设备%v连接信息成功\n", id)
-	vds.disconnectDevice(id)
+	vds.terminateDevice(id)
 	return err
 }
 
@@ -211,7 +211,7 @@ func (vds *VDS) Start() {
 	//log.Println("正在启动 vds ")
 	go vds.dispatcher.Run()
 	go vds.ingressRouter.Run()
-	go vds.readerLoop()
+	go vds.listenConnection()
 }
 
 // Stop 停止vds服务

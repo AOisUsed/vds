@@ -2,7 +2,7 @@ package mock
 
 import (
 	"encoding/json"
-	"virturalDevice/internal/vds/virtualdevice/message"
+	"virturalDevice/internal/vds/message"
 )
 
 // Codec 借用json方式来模拟编解码

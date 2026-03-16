@@ -3,7 +3,7 @@ package aggregator
 import (
 	"log"
 	"sync"
-	"virturalDevice/internal/vds/virtualdevice/message"
+	"virturalDevice/internal/vds/message"
 )
 
 // Aggregator vds中消息集合器，聚合消息并发送到分发器
