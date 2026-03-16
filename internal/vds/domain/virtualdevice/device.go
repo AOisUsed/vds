@@ -9,7 +9,7 @@ import (
 	"virturalDevice/internal/vds/domain/virtualdevice/params"
 )
 
-// VirtualDevice 虚拟通信设备，默认操作是单线程，并发不安全
+// VirtualDevice 虚拟通信设备
 type VirtualDevice struct {
 	id        string
 	cipher    cipher.Cipher          // 密码机

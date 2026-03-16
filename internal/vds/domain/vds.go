@@ -40,7 +40,9 @@ type VDS struct {
 	// 编解码器
 	codec codec.Codec
 
-	rwMutex sync.RWMutex
+	rwMutex   sync.RWMutex
+	startOnce sync.Once
+	stopOnce  sync.Once
 }
 
 // NewVDS 初始化VDS(无设备)
@@ -211,33 +213,41 @@ func (vds *VDS) TerminateAndDeregisterDevice(ctx context.Context, id string) err
 //}
 
 // Start 启动vds服务
+//
+// 第一次执行后，后续调用都是无操作
 func (vds *VDS) Start() {
-	//log.Println("正在启动 vds ")
-	go vds.dispatcher.Run()
-	go vds.ingressRouter.Run()
-	go vds.listenConnection()
+	vds.startOnce.Do(func() {
+		//log.Println("正在启动 vds ")
+		go vds.dispatcher.Run()
+		go vds.ingressRouter.Run()
+		go vds.listenConnection()
+	})
 }
 
 // Stop 停止vds服务
+//
+// 第一次执行后，后续调用都是无操作
 func (vds *VDS) Stop() {
-	vds.rwMutex.Lock()
-	defer vds.rwMutex.Unlock()
+	vds.stopOnce.Do(func() {
+		vds.rwMutex.RLock()
+		defer vds.rwMutex.RUnlock()
 
-	err := vds.conn.Close()
-	if err != nil {
-		log.Printf("连接关闭失败:%v \n", err)
-	}
+		err := vds.conn.Close()
+		if err != nil {
+			log.Printf("连接关闭失败:%v \n", err)
+		}
 
-	vds.ingressRouter.Stop()
-	for id, vd := range vds.vdById {
-		go func(id string, vd *virtualdevice.VirtualDevice) {
-			_ = vds.deregisterDeviceConn(context.Background(), id) // 尝试删除数据仓库中设备连接信息，删除失败也要停止本地goroutine
-			vd.Stop()
-		}(id, vd)
+		vds.ingressRouter.Stop()
+		for id, vd := range vds.vdById {
+			go func(id string, vd *virtualdevice.VirtualDevice) {
+				_ = vds.deregisterDeviceConn(context.Background(), id) // 尝试删除数据仓库中设备连接信息，删除失败也要停止本地goroutine
+				vd.Stop()
+			}(id, vd)
 
-	}
-	vds.aggregator.Stop()
-	vds.dispatcher.Stop()
+		}
+		vds.aggregator.Stop()
+		vds.dispatcher.Stop()
 
-	log.Println("vds 停止")
+		log.Println("vds 停止")
+	})
 }
