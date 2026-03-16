@@ -61,15 +61,19 @@ func NewVDS(conn connection.Connection, repo repository.VDRepository, sender sen
 	return vds
 }
 
-func (vds *VDS) Device(id string) *virtualdevice.VirtualDevice {
+// SendMessage 由vds处理，通过解析 message 的内部信息，调用对应的设备发送消息给目标设备
+func (vds *VDS) SendMessage(msg message.Message) error {
 	vds.rwMutex.RLock()
 	defer vds.rwMutex.RUnlock()
 
-	v, ok := vds.vdById[id]
+	srcId := msg.SrcID
+	dstId := msg.DstID
+	device, ok := vds.vdById[srcId]
 	if !ok {
-		return nil
+		return errors.New(fmt.Sprintf("%v设备不存在", srcId))
 	}
-	return v
+	device.SendMessage(dstId, msg.Payload)
+	return nil
 }
 
 // listenConnection 持续从连接读取数据并处理
@@ -97,8 +101,8 @@ func (vds *VDS) listenConnection() {
 	}
 }
 
-// UpdateDeviceParams 数据仓库中更新设备参数
-func (vds *VDS) UpdateDeviceParams(ctx context.Context, id string) error {
+// SyncDeviceParams 把设备参数同步到数据仓库中
+func (vds *VDS) SyncDeviceParams(ctx context.Context, id string) error {
 	vds.rwMutex.RLock()
 
 	vd, ok := vds.vdById[id]
@@ -200,17 +204,6 @@ func (vds *VDS) TerminateAndDeregisterDevice(ctx context.Context, id string) err
 	vds.terminateDevice(id)
 	return err
 }
-
-//
-//func (vds *VDS) UpdateDeviceParams(ctx context.Context, id string) error{
-//	vds.rwMutex.Lock()
-//	defer vds.rwMutex.Unlock()
-//}
-
-// LoadDevices 从repository载入并运行设备
-//func (vds *VDS) LoadDevices(ctx context.Context) error {
-//
-//}
 
 // Start 启动vds服务
 //

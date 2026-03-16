@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"virturalDevice/internal/vds/domain/message"
 	"virturalDevice/internal/vds/domain/virtualdevice"
 	"virturalDevice/internal/vds/infrastructure/codec"
 	"virturalDevice/internal/vds/infrastructure/connection"
@@ -202,7 +203,7 @@ func TestBasicCommunication(t *testing.T) {
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds1.UpdateDeviceParams(context.Background(), "1")
+	err = vds1.SyncDeviceParams(context.Background(), "1")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -212,7 +213,7 @@ func TestBasicCommunication(t *testing.T) {
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds2.UpdateDeviceParams(context.Background(), "2")
+	err = vds2.SyncDeviceParams(context.Background(), "2")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -222,22 +223,38 @@ func TestBasicCommunication(t *testing.T) {
 	if err != nil {
 		log.Println(err.Error())
 	}
-	err = vds2.UpdateDeviceParams(context.Background(), "3")
+	err = vds2.SyncDeviceParams(context.Background(), "3")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
 	// 设备1 给 设备2 发送消息
-	vds1.Device("1").SendMessage("2", []byte("message 1->2"))
+	_ = vds1.SendMessage(message.Message{
+		SrcID:   "1",
+		DstID:   "2",
+		Payload: []byte("message 1->2"),
+	})
 
 	// 设备2 给 设备1 发送消息
-	vds2.Device("2").SendMessage("1", []byte("message 2->1"))
+	_ = vds2.SendMessage(message.Message{
+		SrcID:   "2",
+		DstID:   "1",
+		Payload: []byte("message 2->1"),
+	})
 
 	// 设备1 发出广播
-	vds1.Device("1").SendMessage("", []byte("1发出的广播"))
+	_ = vds2.SendMessage(message.Message{
+		SrcID:   "1",
+		DstID:   "",
+		Payload: []byte("1发出的广播"),
+	})
 
 	// 设备2 发出广播
-	vds2.Device("2").SendMessage("", []byte("2发出的广播"))
+	_ = vds2.SendMessage(message.Message{
+		SrcID:   "2",
+		DstID:   "",
+		Payload: []byte("2发出的广播"),
+	})
 
 	time.Sleep(2 * time.Second)
 
@@ -281,13 +298,21 @@ func TestConcurrentCommunication(t *testing.T) {
 					if err != nil {
 						log.Println(err.Error())
 					}
-					err = vds.UpdateDeviceParams(context.Background(), id)
+					err = vds.SyncDeviceParams(context.Background(), id)
 
 					dstId := rand.Int() % idg.Max()
 					if dstId%3 != 0 {
-						vds.Device(id).SendMessage(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
+						_ = vds.SendMessage(message.Message{
+							SrcID:   id,
+							DstID:   strconv.Itoa(dstId),
+							Payload: []byte(fmt.Sprintf("message %v->%d", id, dstId)),
+						})
 					} else {
-						vds.Device(id).SendMessage("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
+						_ = vds.SendMessage(message.Message{
+							SrcID:   id,
+							DstID:   "",
+							Payload: []byte(fmt.Sprintf(" %v broadcast message ", id)),
+						})
 					}
 
 				}(vds)
@@ -342,13 +367,21 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 						log.Println(err.Error())
 					}
 					log.Printf("设备%v的mode是%v\n", id, mode)
-					err = vds.UpdateDeviceParams(context.Background(), id)
+					err = vds.SyncDeviceParams(context.Background(), id)
 
 					dstId := rand.Int() % idg.Max()
-					if dstId%3 == 0 {
-						vds.Device(id).SendMessage(strconv.Itoa(dstId), []byte(fmt.Sprintf("message %v->%d", id, dstId)))
+					if dstId%3 != 0 {
+						_ = vds.SendMessage(message.Message{
+							SrcID:   id,
+							DstID:   strconv.Itoa(dstId),
+							Payload: []byte(fmt.Sprintf("message %v->%d", id, dstId)),
+						})
 					} else {
-						vds.Device(id).SendMessage("", []byte(fmt.Sprintf(" %v broadcast message ", id)))
+						_ = vds.SendMessage(message.Message{
+							SrcID:   id,
+							DstID:   "",
+							Payload: []byte(fmt.Sprintf(" %v broadcast message ", id)),
+						})
 					}
 
 				}(vds, j)
