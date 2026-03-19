@@ -399,11 +399,12 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 	wg.Wait()
 }
 
-func TestParamsSyncer(t *testing.T) {
+// 用于测试paramsSyncer 在用户高并发情况下是否会节制数据库的读写次数
+func TestHighConcurrentParamsSyncer(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// 公用的repository (临时使用)
-	repo := repository.NewVDRepository(time.Millisecond * 20)
+	repo := repository.NewVDRepository(time.Millisecond * 1000)
 
 	// 创造并启动数个vds
 	var vdss []*VDS
@@ -413,20 +414,26 @@ func TestParamsSyncer(t *testing.T) {
 		vdss[i].Start()
 	}
 
-	_ = vdss[0].ActivateAndRegisterDevice(context.Background(), "1",
-		virtualdevice.WithParams(
-			model.NewRadioParams(
-				model.WithMode(1),
-				model.WithCryptoMode(1),
-			),
-		),
-	)
+	vds0 := vdss[0]
+
+	_ = vds0.ActivateAndRegisterDevice(context.Background(), "1", virtualdevice.WithParams(model.NewRadioParams()))
+
+	for i := 0; i < 100; i++ {
+		go func() {
+			randMs := rand.Int() % 10000
+			time.Sleep(time.Duration(randMs) * time.Millisecond)
+			vds0.SyncParams("1")
+		}()
+
+	}
+	time.Sleep(20 * time.Second)
 
 	// 停止 vds
 	for _, vds := range vdss {
 		vds.Stop()
 		wg.Done()
 	}
+	fmt.Printf("goroutine number: %v \n", runtime.NumGoroutine())
 
 	wg.Wait()
 }

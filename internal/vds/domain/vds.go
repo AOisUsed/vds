@@ -151,8 +151,8 @@ func (vds *VDS) updateDeviceParams(id string, params params.Params) error {
 	return nil
 }
 
-// triggerParamsSyncUnsafe 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法) (并发不安全)
-func (vds *VDS) triggerParamsSyncUnsafe(id string) {
+// syncParamsUnsafe 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法) (并发不安全)
+func (vds *VDS) syncParamsUnsafe(id string) {
 	ch, exists := vds.paramsSyncerTriggerById[id]
 	if !exists {
 		log.Printf("%v设备已下线", id)
@@ -166,14 +166,15 @@ func (vds *VDS) triggerParamsSyncUnsafe(id string) {
 	select {
 	case ch <- struct{}{}:
 	default:
+		//log.Printf("设备 %v 同步请求过于频繁，已丢弃冗余触发", id)
 	}
 }
 
-// triggerParamsSync 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法)
-func (vds *VDS) triggerParamsSync(id string) {
+// SyncParams 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法)
+func (vds *VDS) SyncParams(id string) {
 	vds.rwMutex.RLock()
 	defer vds.rwMutex.RUnlock()
-	vds.triggerParamsSyncUnsafe(id)
+	vds.syncParamsUnsafe(id)
 }
 
 // runParamsSyncListener 创建并启动参数同步监听器：持续监听“把本地设备的参数上传到数据中心中”的请求,并执行。有失败重传机制 (并发不安全)
@@ -195,7 +196,8 @@ func (vds *VDS) runParamsSyncListener(id string) {
 			default:
 			}
 		}
-		// time.Sleep(300 * time.Millisecond)  // 可以在这里添加休眠时间，防止用户高频率更改设备参数产生的数据仓库写入压力
+		//time.Sleep(300 * time.Millisecond) // 可以在这里添加休眠时间，防止用户高频率更改设备参数产生的数据仓库写入压力
+		log.Printf("设备 %v 同步了设备参数到数据仓库中", id)
 	}
 }
 
@@ -217,7 +219,7 @@ func (vds *VDS) updateAndSyncParams(id string, params params.Params) error {
 	}
 
 	// 交给 paramsSyncer 来同步设备参数到数据仓库
-	vds.triggerParamsSyncUnsafe(id)
+	vds.syncParamsUnsafe(id)
 	return nil
 }
 
