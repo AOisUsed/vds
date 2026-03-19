@@ -42,7 +42,7 @@ type VDS struct {
 	codec codec.Codec
 
 	// 设备状态同步
-	paramsSyncerById map[string]chan struct{} // 设备参数同步
+	paramsSyncerTriggerById map[string]chan struct{} // 设备参数同步触发通道
 
 	rwMutex   sync.RWMutex
 	startOnce sync.Once
@@ -52,13 +52,13 @@ type VDS struct {
 // NewVDS 初始化VDS(无设备)
 func NewVDS(conn connection.Connection, repo repository.VDRepository, sender sender.Sender, codec codec.Codec) *VDS {
 	vds := &VDS{
-		vdById:           make(map[string]*virtualdevice.VirtualDevice),
-		conn:             conn,
-		incomingCh:       make(chan message.Message, 100), // 设置100的缓存
-		vdRepository:     repo,
-		sender:           sender,
-		codec:            codec,
-		paramsSyncerById: make(map[string]chan struct{}),
+		vdById:                  make(map[string]*virtualdevice.VirtualDevice),
+		conn:                    conn,
+		incomingCh:              make(chan message.Message, 100), // 设置100的缓存
+		vdRepository:            repo,
+		sender:                  sender,
+		codec:                   codec,
+		paramsSyncerTriggerById: make(map[string]chan struct{}),
 	}
 	vds.ingressRouter = ingressrouter.NewIngressRouter(vds.incomingCh)
 	vds.aggregator = aggregator.NewAggregator()
@@ -66,7 +66,7 @@ func NewVDS(conn connection.Connection, repo repository.VDRepository, sender sen
 	return vds
 }
 
-// SendMessage 由vds处理，通过解析 message 的内部信息，调用对应的设备发送消息给目标设备
+// SendMessage 由vds处理，通过解析 message 的内部信息，调用对应的消息来源设备发送消息给目标设备
 func (vds *VDS) SendMessage(msg message.Message) error {
 	vds.rwMutex.RLock()
 	defer vds.rwMutex.RUnlock()
@@ -121,8 +121,9 @@ func (vds *VDS) SubscribeDeviceMessage(id string) (<-chan message.Message, error
 	return msgCh, nil
 }
 
-// syncDeviceParams 把设备参数同步到数据仓库中 (并发不安全)
+// syncDeviceParams 把设备参数同步到数据仓库中
 func (vds *VDS) syncDeviceParams(ctx context.Context, id string) error {
+	vds.rwMutex.RLock()
 	vd, ok := vds.vdById[id]
 	if !ok {
 		vds.rwMutex.RUnlock()
@@ -131,6 +132,12 @@ func (vds *VDS) syncDeviceParams(ctx context.Context, id string) error {
 
 	parameters := vd.Params()
 	err := vds.vdRepository.SetParams(ctx, id, parameters)
+	return err
+}
+
+// removeDeviceParams 把数据仓库中的设备参数移除
+func (vds *VDS) removeDeviceParams(ctx context.Context, id string) error {
+	err := vds.vdRepository.RemoveParams(ctx, id)
 	return err
 }
 
@@ -144,6 +151,61 @@ func (vds *VDS) updateDeviceParams(id string, params params.Params) error {
 	return nil
 }
 
+// triggerParamsSyncUnsafe 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法) (并发不安全)
+func (vds *VDS) triggerParamsSyncUnsafe(id string) {
+	ch, exists := vds.paramsSyncerTriggerById[id]
+	if !exists {
+		log.Printf("%v设备已下线", id)
+		return
+	}
+
+	// 策略：丢弃冗余触发
+	// 由于参数同步以“执行时刻的最新值”为准，积压多个同步任务只会重复上传相同的最新数据，浪费资源。
+	// 因此，若通道已满（表示已有任务在处理或排队），则直接丢弃本次触发信号，确保最多只有一个待处理任务。
+
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}
+
+// triggerParamsSync 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法)
+func (vds *VDS) triggerParamsSync(id string) {
+	vds.rwMutex.RLock()
+	defer vds.rwMutex.RUnlock()
+	vds.triggerParamsSyncUnsafe(id)
+}
+
+// runParamsSyncListener 创建并启动参数同步监听器：持续监听“把本地设备的参数上传到数据中心中”的请求,并执行。有失败重传机制 (并发不安全)
+func (vds *VDS) runParamsSyncListener(id string) {
+	// 创建 参数同步器
+	devId := id
+	syncTrigger := make(chan struct{}, 1)
+	vds.paramsSyncerTriggerById[id] = syncTrigger
+
+	// 循环运行 参数同步处理器
+	// 工作模式：接收到 syncTrigger 信号，则上传设备参数
+	for range syncTrigger {
+		err := vds.syncDeviceParams(context.Background(), devId)
+		if err != nil {
+			// 如果上传失败，通过给needSync发送通知，传达重试意图
+			time.Sleep(1 * time.Second) // 退避重试: 失败过一段时间后才重试，防止雪崩。可以改变sleep的时长调整重试延时
+			select {
+			case syncTrigger <- struct{}{}:
+			default:
+			}
+		}
+		// time.Sleep(300 * time.Millisecond)  // 可以在这里添加休眠时间，防止用户高频率更改设备参数产生的数据仓库写入压力
+	}
+}
+
+// stopParamsSyncListener 停止监听参数同步请求,并移除对应的触发器(即channel) (并发不安全)
+func (vds *VDS) stopParamsSyncListener(id string) {
+	close(vds.paramsSyncerTriggerById[id])
+	delete(vds.paramsSyncerTriggerById, id)
+}
+
+// updateAndSyncParams 更新设备参数并异步上传到数据仓库中
 func (vds *VDS) updateAndSyncParams(id string, params params.Params) error {
 	vds.rwMutex.RLock()
 	defer vds.rwMutex.RUnlock()
@@ -153,8 +215,10 @@ func (vds *VDS) updateAndSyncParams(id string, params params.Params) error {
 	if err != nil {
 		return err
 	}
-	// 交给upda
 
+	// 交给 paramsSyncer 来同步设备参数到数据仓库
+	vds.triggerParamsSyncUnsafe(id)
+	return nil
 }
 
 // registerDeviceConn 数据仓库中添加设备连接信息
@@ -183,7 +247,7 @@ func (vds *VDS) deregisterDeviceConn(ctx context.Context, id string) error {
 	return err
 }
 
-// activateDevice vds中创建设备，与前后消息通道连接，并运行设备。
+// activateDevice vds中创建设备，与前后消息通道连接，开启参数同步监听器，并运行设备。
 //
 // 如果同id的设备存在会删除原设备，替换为新设备
 func (vds *VDS) activateDevice(id string, opts ...virtualdevice.Option) {
@@ -197,11 +261,12 @@ func (vds *VDS) activateDevice(id string, opts ...virtualdevice.Option) {
 	vd := virtualdevice.NewVirtualDevice(id, routerOutCh, opts...)
 	vdOutCh := vd.OutChan()
 	vds.aggregator.Watch(vdOutCh)
+	go vds.runParamsSyncListener(id)
 	go vd.Run()
 	vds.vdById[id] = vd
 }
 
-// terminateDevice 停止并移除设备和及相关消息收发通道。
+// terminateDevice 停止并移除设备和及相关消息收发通道,停止参数同步监听器。
 //
 // 多次调用，则第一次调用后都是无操作
 func (vds *VDS) terminateDevice(id string) {
@@ -213,63 +278,47 @@ func (vds *VDS) terminateDevice(id string) {
 	}
 	vds.ingressRouter.RemoveOutboundCh(id)
 	vds.vdById[id].Stop()
+	vds.stopParamsSyncListener(id)
 	delete(vds.vdById, id)
 }
 
-func (vds *VDS) runParamsSyncer(id string) {
-	// 创建 参数同步处理器
-	vds.rwMutex.Lock()
-	if _, exists := vds.paramsSyncerById[id]; exists {
-		return
-	}
-
-	devId := id
-	paramsSyncer := make(chan struct{}, 1)
-	vds.paramsSyncerById[id] = paramsSyncer
-	vds.rwMutex.Unlock()
-
-	// 运行 参数同步处理器
-	for range paramsSyncer {
-		err := vds.syncDeviceParams(context.Background(), devId)
-		if err != nil {
-			// 如果失败，重试
-			select {
-			case paramsSyncer <- struct{}{}:
-			default:
-			}
-			continue
-		}
-	}
-
-}
-
-// ActivateAndRegisterDevice 连接并注册设备连接信息到数据库中,更新
+// ActivateAndRegisterDevice 连接并注册设备连接信息，同步设备参数到数据库中
 func (vds *VDS) ActivateAndRegisterDevice(ctx context.Context, id string, opts ...virtualdevice.Option) error {
-
 	// 创建并运行设备
 	vds.activateDevice(id, opts...)
 
-	// 注册设备到数据仓库中
+	// 注册设备连接到数据仓库中
 	err := vds.registerDeviceConn(ctx, id)
 	if err != nil {
 		// 失败则回滚
 		vds.terminateDevice(id)
 		return err
 	}
+	// 同步设备参数到数据仓库中
+	err = vds.syncDeviceParams(ctx, id)
+	if err != nil {
+		// 失败则回滚
+		vds.terminateDevice(id)
+		return err
+	}
 
-	log.Printf("注册设备%v连接信息成功\n", id)
+	log.Printf("注册设备%v连接信息和参数成功\n", id)
 	return nil
 }
 
 // TerminateAndDeregisterDevice 停止，断开vd设备，并删除数据库中设备连接信息
 func (vds *VDS) TerminateAndDeregisterDevice(ctx context.Context, id string) error {
-
+	vds.terminateDevice(id)
 	err := vds.deregisterDeviceConn(ctx, id)
 	if err != nil {
 		return err
 	}
-	log.Printf("删除设备%v连接信息成功\n", id)
-	vds.terminateDevice(id)
+	err = vds.removeDeviceParams(ctx, id)
+	if err != nil {
+		// 注意: 此处报错，会出现 repo 中设备连接信息已经被抹除，但是参数信息还存在的情况,即不保证 参数和连接 的一致性
+		return err
+	}
+	log.Printf("删除设备%v连接信息和参数信息成功\n", id)
 	return err
 }
 
@@ -301,7 +350,10 @@ func (vds *VDS) Stop() {
 		vds.ingressRouter.Stop()
 		for id, vd := range vds.vdById {
 			go func(id string, vd *virtualdevice.VirtualDevice) {
-				_ = vds.deregisterDeviceConn(context.Background(), id) // 尝试删除数据仓库中设备连接信息，删除失败也要停止本地goroutine
+				// 尝试删除数据仓库中设备连接信息和参数信息，删除失败也要停止本地设备
+				_ = vds.deregisterDeviceConn(context.Background(), id)
+				_ = vds.removeDeviceParams(context.Background(), id)
+				vds.stopParamsSyncListener(id)
 				vd.Stop()
 			}(id, vd)
 
@@ -309,6 +361,6 @@ func (vds *VDS) Stop() {
 		vds.aggregator.Stop()
 		vds.dispatcher.Stop()
 
-		log.Println("vds 停止")
+		//log.Println("vds 停止")
 	})
 }

@@ -41,6 +41,19 @@ func (repo *Repository) SetParams(ctx context.Context, id string, params params.
 	}
 }
 
+// RemoveParams 不存在params不会返回error
+func (repo *Repository) RemoveParams(ctx context.Context, id string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.Lock()
+		defer repo.rwMu.Unlock()
+		delete(repo.vdParamsByID, id)
+	}
+	return nil
+}
+
 func (repo *Repository) Params(ctx context.Context, id string) (params.Params, error) {
 	select {
 	case <-ctx.Done():

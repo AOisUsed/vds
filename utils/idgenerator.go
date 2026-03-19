@@ -12,7 +12,7 @@ type IdGenerator struct {
 }
 
 func NewIdGenerator() *IdGenerator {
-	return &IdGenerator{max: -1}
+	return &IdGenerator{max: 0}
 }
 
 func (idg *IdGenerator) Next() string {
@@ -31,5 +31,5 @@ func (idg *IdGenerator) Max() int {
 func (idg *IdGenerator) Reset() {
 	idg.mu.Lock()
 	defer idg.mu.Unlock()
-	idg.max = -1
+	idg.max = 0
 }

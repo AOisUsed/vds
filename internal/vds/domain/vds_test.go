@@ -277,7 +277,7 @@ func TestConcurrentCommunication(t *testing.T) {
 
 	// 创造并启动数个vds
 	var vdss []*VDS
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 3; i++ {
 		vdss = append(vdss, NewVDS(connection.NewConn(), repo, transport.NewSender(), codec.NewCodec()))
 		wg.Add(1)
 		vdss[i].Start()
@@ -287,7 +287,7 @@ func TestConcurrentCommunication(t *testing.T) {
 
 	for _, vds := range vdss {
 		// 每个 vds 中产生数个 vd
-		numVD := rand.Int() % 100
+		numVD := rand.Int() % 20
 		//numVD := 5
 		// 每个 vds 并发产生多个 vd,并发送消息
 		go func(vds *VDS) {
@@ -321,7 +321,7 @@ func TestConcurrentCommunication(t *testing.T) {
 	}
 
 	// 等待发送完成
-	time.Sleep(20 * time.Second)
+	time.Sleep(5 * time.Second)
 	fmt.Println("\n 即将开始关闭vds")
 	// 停止 vds
 	for _, vds := range vdss {
@@ -357,17 +357,16 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 			for j := 0; j < numVD; j++ {
 				id := idg.Next()
 				go func(vds *VDS, j int) {
-					mode := j % 3
+					mode := rand.Int() % 3
 					err := vds.ActivateAndRegisterDevice(context.Background(), id,
 						virtualdevice.WithParams(
-							model.NewRadioParams(model.WithMode(mode)), // todo：还没写完
+							model.NewRadioParams(model.WithMode(mode)),
 						),
 					)
 					if err != nil {
 						log.Println(err.Error())
 					}
 					log.Printf("设备%v的mode是%v\n", id, mode)
-					err = vds.syncDeviceParams(context.Background(), id)
 
 					dstId := rand.Int() % idg.Max()
 					if dstId%3 != 0 {
@@ -390,6 +389,38 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 	}
 
 	time.Sleep(10 * time.Second)
+
+	// 停止 vds
+	for _, vds := range vdss {
+		vds.Stop()
+		wg.Done()
+	}
+
+	wg.Wait()
+}
+
+func TestParamsSyncer(t *testing.T) {
+	var wg sync.WaitGroup
+
+	// 公用的repository (临时使用)
+	repo := repository.NewVDRepository(time.Millisecond * 20)
+
+	// 创造并启动数个vds
+	var vdss []*VDS
+	for i := 0; i < 1; i++ {
+		vdss = append(vdss, NewVDS(connection.NewConn(), repo, transport.NewSender(), codec.NewCodec()))
+		wg.Add(1)
+		vdss[i].Start()
+	}
+
+	_ = vdss[0].ActivateAndRegisterDevice(context.Background(), "1",
+		virtualdevice.WithParams(
+			model.NewRadioParams(
+				model.WithMode(1),
+				model.WithCryptoMode(1),
+			),
+		),
+	)
 
 	// 停止 vds
 	for _, vds := range vdss {

@@ -41,7 +41,7 @@ func (d *Dispatcher) Run() {
 // Stop 停止消息分发器 (注意：强制停止，会使 incomingCh 上游阻塞，)
 func (d *Dispatcher) Stop() {
 	d.workerPool.Stop()
-	log.Println("dispatcher 停止")
+	//log.Println("dispatcher 停止")
 }
 
 // dispatch 分发消息
