@@ -1,15 +1,15 @@
 ## todos
+- 测试 cancel context的 是否影响数据一致性和性能
 
 
 
-
-
-
-时间轴 ----------------------------------------------->
-A -> 修改本地，            修改数据库       最终版本：A, 错误
-   B -> 修改本地，  修改数据库
-
-
-
+## 应用层功能
+- SendMessage(msg)
+- CancelMessage ()
+- SubscribeDeviceMessage(id )
+- ActivateAndRegisterDevice(ctx, id, opts)
+- TerminateAndDeregisterDevice(ctx, id)
+- Start()   // vds
+- Stop()    // vds
 
 

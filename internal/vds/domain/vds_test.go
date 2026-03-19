@@ -29,7 +29,7 @@ func NewMockVDS() *VDS {
 	return NewVDS(conn, repo, sender, jsonCodec)
 }
 
-func TestBasicLifeCycle(t *testing.T) {
+func TestVDSBasicLifeCycle(t *testing.T) {
 	vds := NewMockVDS()
 	vds.Start()
 
@@ -395,7 +395,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 		vds.Stop()
 		wg.Done()
 	}
-
+	fmt.Printf("goroutine number: %v \n", runtime.NumGoroutine())
 	wg.Wait()
 }
 
@@ -422,7 +422,7 @@ func TestHighConcurrentParamsSyncer(t *testing.T) {
 		go func() {
 			randMs := rand.Int() % 10000
 			time.Sleep(time.Duration(randMs) * time.Millisecond)
-			vds0.SyncParams("1")
+			vds0.triggerParamsSync("1")
 		}()
 
 	}

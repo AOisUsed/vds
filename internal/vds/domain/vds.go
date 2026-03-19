@@ -90,7 +90,6 @@ func (vds *VDS) listenConnection() {
 		if err != nil {
 			if err != io.EOF {
 				log.Printf("无法从连接读取数据:%v \n", err)
-
 				time.Sleep(3 * time.Second) // 出现EOF外其他error后, 5秒后再重新尝试读数据
 				continue
 			}
@@ -100,7 +99,7 @@ func (vds *VDS) listenConnection() {
 		msg, err := vds.codec.Decode(data)
 		if err != nil {
 			log.Printf("无法解码接收到的数据:%v \n", err)
-			return
+			continue
 		}
 		vds.incomingCh <- msg
 	}
@@ -151,8 +150,8 @@ func (vds *VDS) updateDeviceParams(id string, params params.Params) error {
 	return nil
 }
 
-// syncParamsUnsafe 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法) (并发不安全)
-func (vds *VDS) syncParamsUnsafe(id string) {
+// triggerParamsSyncUnsafe 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法) (并发不安全)
+func (vds *VDS) triggerParamsSyncUnsafe(id string) {
 	ch, exists := vds.paramsSyncerTriggerById[id]
 	if !exists {
 		log.Printf("%v设备已下线", id)
@@ -170,11 +169,11 @@ func (vds *VDS) syncParamsUnsafe(id string) {
 	}
 }
 
-// SyncParams 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法)
-func (vds *VDS) SyncParams(id string) {
+// triggerParamsSync 触发同步本地设备参数到数据仓库的操作 (具体同步操作见 runParamsSyncListener 方法)
+func (vds *VDS) triggerParamsSync(id string) {
 	vds.rwMutex.RLock()
 	defer vds.rwMutex.RUnlock()
-	vds.syncParamsUnsafe(id)
+	vds.triggerParamsSyncUnsafe(id)
 }
 
 // runParamsSyncListener 创建并启动参数同步监听器：持续监听“把本地设备的参数上传到数据中心中”的请求,并执行。有失败重传机制 (并发不安全)
@@ -219,7 +218,7 @@ func (vds *VDS) updateAndSyncParams(id string, params params.Params) error {
 	}
 
 	// 交给 paramsSyncer 来同步设备参数到数据仓库
-	vds.syncParamsUnsafe(id)
+	vds.triggerParamsSyncUnsafe(id)
 	return nil
 }
 
