@@ -1,0 +1,122 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+	"virturalDevice/pkg/vds/domain/connection"
+	"virturalDevice/pkg/vds/domain/repository"
+	"virturalDevice/pkg/vds/domain/virtualdevice/params"
+)
+
+// MockVDRepository 测试用模拟vdRepo
+type MockVDRepository struct {
+	connByID     map[string]connection.Connection
+	vdParamsByID map[string]params.Params
+
+	rwMu             sync.RWMutex
+	simulatedLatency time.Duration //模拟数据库操作的延迟，便于测试context取消功能
+}
+
+// NewVDRepository 创建mock repo, simulatedLatency 用于模拟数据库操作时间
+func NewVDRepository(simulatedLatency time.Duration) repository.VDRepository {
+	return &MockVDRepository{
+		connByID:         make(map[string]connection.Connection),
+		vdParamsByID:     make(map[string]params.Params),
+		simulatedLatency: simulatedLatency,
+	}
+}
+
+func (repo *MockVDRepository) SetParams(ctx context.Context, id string, params params.Params) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.Lock()
+		defer repo.rwMu.Unlock()
+		repo.vdParamsByID[id] = params
+		return nil
+	}
+}
+
+// RemoveParams 不存在params不会返回error
+func (repo *MockVDRepository) RemoveParams(ctx context.Context, id string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.Lock()
+		defer repo.rwMu.Unlock()
+		delete(repo.vdParamsByID, id)
+	}
+	return nil
+}
+
+func (repo *MockVDRepository) Params(ctx context.Context, id string) (params.Params, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.RLock()
+		defer repo.rwMu.RUnlock()
+		if val, ok := repo.vdParamsByID[id]; ok {
+			return val, nil
+		}
+		return nil, errors.New(fmt.Sprintf("不存在设备%v的参数", id))
+	}
+}
+
+func (repo *MockVDRepository) AllParams(ctx context.Context) (map[string]params.Params, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.RLock()
+		defer repo.rwMu.RUnlock()
+		if len(repo.vdParamsByID) <= 0 {
+			return nil, errors.New("数据库为空")
+		}
+		return repo.vdParamsByID, nil
+	}
+}
+
+func (repo *MockVDRepository) Connection(ctx context.Context, id string) (connection.Connection, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.RLock()
+		defer repo.rwMu.RUnlock()
+		if val, ok := repo.connByID[id]; ok {
+			return val, nil
+		}
+		return nil, errors.New(fmt.Sprintf("不存在设备%v的连接", id))
+	}
+}
+
+func (repo *MockVDRepository) SetConnection(ctx context.Context, id string, conn connection.Connection) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.Lock()
+		defer repo.rwMu.Unlock()
+		repo.connByID[id] = conn
+		return nil
+	}
+}
+
+// RemoveConnection 注意：移除不存在的VDConn不会返回error
+func (repo *MockVDRepository) RemoveConnection(ctx context.Context, id string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(repo.simulatedLatency):
+		repo.rwMu.Lock()
+		defer repo.rwMu.Unlock()
+		delete(repo.connByID, id)
+		return nil
+	}
+}

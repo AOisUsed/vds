@@ -9,7 +9,5 @@
 - SubscribeDeviceMessage(id )
 - ActivateAndRegisterDevice(ctx, id, opts)
 - TerminateAndDeregisterDevice(ctx, id)
-- Start()   // vds
-- Stop()    // vds
 
 
