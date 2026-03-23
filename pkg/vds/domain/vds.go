@@ -124,8 +124,9 @@ func (vds *VDS) SubscribeDeviceMessage(id string) (<-chan message.Message, error
 func (vds *VDS) syncDeviceParams(ctx context.Context, id string) error {
 	vds.rwMutex.RLock()
 	vd, ok := vds.vdById[id]
+	vds.rwMutex.RUnlock()
+
 	if !ok {
-		vds.rwMutex.RUnlock()
 		return errors.New(fmt.Sprintf("vds中无设备%v", id))
 	}
 
@@ -181,7 +182,9 @@ func (vds *VDS) runParamsSyncListener(id string) {
 	// 创建 参数同步器
 	devId := id
 	syncTrigger := make(chan struct{}, 1)
+	vds.rwMutex.Lock()
 	vds.paramsSyncerTriggerById[id] = syncTrigger
+	vds.rwMutex.Unlock()
 
 	// 循环运行 参数同步处理器
 	// 工作模式：接收到 syncTrigger 信号，则上传设备参数
@@ -190,10 +193,7 @@ func (vds *VDS) runParamsSyncListener(id string) {
 		if err != nil {
 			// 如果上传失败，通过给needSync发送通知，传达重试意图
 			time.Sleep(1 * time.Second) // 退避重试: 失败过一段时间后才重试，防止雪崩。可以改变sleep的时长调整重试延时
-			select {
-			case syncTrigger <- struct{}{}:
-			default:
-			}
+			vds.triggerParamsSyncUnsafe(devId)
 		}
 		//time.Sleep(300 * time.Millisecond) // 可以在这里添加休眠时间，防止用户高频率更改设备参数产生的数据仓库写入压力
 		log.Printf("设备 %v 同步了设备参数到数据仓库中", id)
@@ -340,8 +340,8 @@ func (vds *VDS) Start() {
 // 第一次执行后，后续调用都是无操作
 func (vds *VDS) Stop() {
 	vds.stopOnce.Do(func() {
-		vds.rwMutex.RLock()
-		defer vds.rwMutex.RUnlock()
+		vds.rwMutex.Lock()
+		defer vds.rwMutex.Unlock()
 
 		err := vds.conn.Close()
 		if err != nil {
@@ -349,19 +349,28 @@ func (vds *VDS) Stop() {
 		}
 
 		vds.ingressRouter.Stop()
-		for id, vd := range vds.vdById {
-			go func(id string, vd *virtualdevice.VirtualDevice) {
-				// 尝试删除数据仓库中设备连接信息和参数信息，删除失败也要停止本地设备
-				_ = vds.deregisterDeviceConn(context.Background(), id)
-				_ = vds.removeDeviceParams(context.Background(), id)
-				vds.stopParamsSyncListener(id)
-				vd.Stop()
-			}(id, vd)
 
+		var repoWg sync.WaitGroup
+		for id, vd := range vds.vdById {
+
+			// 尝试删除数据仓库中设备连接信息和参数信息，删除失败也要停止本地设备
+			repoWg.Add(1)
+			go func() {
+				defer repoWg.Done()
+				_ = vds.deregisterDeviceConn(context.Background(), id)
+			}()
+			repoWg.Add(1)
+			go func() {
+				defer repoWg.Done()
+				_ = vds.removeDeviceParams(context.Background(), id)
+			}()
+			vds.stopParamsSyncListener(id)
+			vd.Stop()
 		}
 		vds.aggregator.Stop()
 		vds.dispatcher.Stop()
 
+		repoWg.Wait()
 		//log.Println("vds 停止")
 	})
 }

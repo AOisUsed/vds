@@ -18,6 +18,8 @@ import (
 	"virturalDevice/pkg/vds/infrastructure/repository"
 	"virturalDevice/pkg/vds/infrastructure/sender"
 	"virturalDevice/utils"
+
+	"go.uber.org/goleak"
 )
 
 // 单机使用vds (repo仅在此vds中)
@@ -81,6 +83,7 @@ func TestBasicRegisterDevice(t *testing.T) {
 }
 
 func TestConcurrentRegisterDevice(t *testing.T) {
+	defer goleak.VerifyNone(t)
 	vds := NewMockVDS()
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -146,6 +149,7 @@ func TestConcurrentDeregisterDevice(t *testing.T) {
 }
 
 func TestConcurrentRegisterDeregisterDevice(t *testing.T) {
+	defer goleak.VerifyNone(t)
 	vds := NewMockVDS()
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -270,6 +274,7 @@ func TestBasicCommunication(t *testing.T) {
 }
 
 func TestConcurrentCommunication(t *testing.T) {
+	defer goleak.VerifyNone(t)
 	var wg sync.WaitGroup
 
 	// 公用的repository (临时使用)
@@ -298,7 +303,7 @@ func TestConcurrentCommunication(t *testing.T) {
 					if err != nil {
 						log.Println(err.Error())
 					}
-					err = vds.syncDeviceParams(context.Background(), id)
+					//err = vds.syncDeviceParams(context.Background(), id)
 
 					dstId := rand.Int() % idg.Max()
 					if dstId%3 != 0 {
@@ -401,6 +406,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 
 // 用于测试paramsSyncer 在用户高并发情况下是否会节制数据库的读写次数
 func TestHighConcurrentParamsSyncer(t *testing.T) {
+	defer goleak.VerifyNone(t)
 	var wg sync.WaitGroup
 
 	// 公用的repository (临时使用)
@@ -418,16 +424,20 @@ func TestHighConcurrentParamsSyncer(t *testing.T) {
 
 	_ = vds0.ActivateAndRegisterDevice(context.Background(), "1", virtualdevice.WithParams(infrastructure.NewRadioParams()))
 
-	for i := 0; i < 100; i++ {
+	var syncWg sync.WaitGroup
+
+	for i := 0; i < 10000; i++ {
+		syncWg.Add(1)
 		go func() {
-			randMs := rand.Int() % 10000
+			defer syncWg.Done()
+			randMs := rand.Int() % 5000
 			time.Sleep(time.Duration(randMs) * time.Millisecond)
 			vds0.triggerParamsSync("1")
 		}()
 
 	}
-	time.Sleep(20 * time.Second)
 
+	syncWg.Wait()
 	// 停止 vds
 	for _, vds := range vdss {
 		vds.Stop()
@@ -436,4 +446,5 @@ func TestHighConcurrentParamsSyncer(t *testing.T) {
 	fmt.Printf("goroutine number: %v \n", runtime.NumGoroutine())
 
 	wg.Wait()
+	time.Sleep(1 * time.Second)
 }

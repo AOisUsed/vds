@@ -27,9 +27,11 @@ func newConnection(kind string, lc fx.Lifecycle) connection.Connection {
 			},
 		})
 		return conn
-	} else if kind == "udp" {
-		conn := NewUDPConn()
 	}
+	//else if kind == "udp" {
+	//conn := NewUDPConn()
+	//}
+	return nil
 
 }
 

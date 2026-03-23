@@ -12,6 +12,26 @@ import (
 )
 
 // MockVDRepository 测试用模拟vdRepo
+//
+// 注意：由于进行数据库操作时，结构都是
+//
+// select {
+// case <-ctx.Done():
+//
+//	// 一些操作...
+//
+// case <-time.After(repo.simulatedLatency):
+//
+//	// 一些操作...
+//	}
+//
+// 如果测试时，主函数中，调用的数据库操作没有使用ctx.Done() 取消，
+// 也没有等待数据库的模拟延迟计时(simulatedLatency)到达就结束，会因为goroutine还在等待两种情况中的一种而泄露。
+//
+// 解决办法：可以在主函数退出前使用
+// time.Sleep(simulatedLatency) 保证select语句至少有一个出口可以结束，就可以防止此goroutine泄露
+//
+// 使用真实数据库时，由于一般会有连接关闭的步骤，所以不会有这样的问题
 type MockVDRepository struct {
 	connByID     map[string]connection.Connection
 	vdParamsByID map[string]params.Params

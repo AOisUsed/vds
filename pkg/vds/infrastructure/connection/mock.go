@@ -63,6 +63,7 @@ func (c *Conn) Receive() ([]byte, error) {
 func (c *Conn) Close() error {
 	c.closeOnce.Do(func() {
 		c.closed.Store(true)
+		close(c.dataCh)
 	})
 	return nil
 }
