@@ -1,6 +1,7 @@
 package sender
 
 import (
+	"context"
 	"virturalDevice/pkg/vds/domain/connection"
 )
 
@@ -11,7 +12,7 @@ func NewSender() *Sender {
 	return new(Sender)
 }
 
-func (ms *Sender) Send(dst connection.Connection, data []byte) error {
-	err := dst.Send(data)
+func (ms *Sender) Send(ctx context.Context, conn connection.Connection, data []byte) error {
+	err := conn.Send(ctx, data)
 	return err
 }

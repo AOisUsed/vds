@@ -1,6 +1,6 @@
-<mxfile host="drawio-plugin" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36" modified="2026-03-19T02:03:02.561Z" etag="XEHZuHbvXvYslb3c6DNu" version="22.1.22" type="embed" pages="4">
+<mxfile host="drawio-plugin" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36" modified="2026-03-23T08:13:14.657Z" etag="V1DkxsFVbJQLmUYHQwds" version="22.1.22" type="embed" pages="5">
   <diagram name="vds结构" id="B2FDKMMm1NmaSiyQPUSs">
-    <mxGraphModel dx="1050" dy="982" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="1335" dy="677" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -117,7 +117,7 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="21" value="paramsSyncer" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="21" value="paramsSyncer" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="157" y="677" width="96" height="50" as="geometry" />
         </mxCell>
       </root>
@@ -407,6 +407,71 @@
         </mxCell>
         <mxCell id="wzQNH4Hll4jtiSGmJCpu-22" value="注：vd在发送消息后可能会取消，第3步中获取目标物理量地址涉及一些数据库查询，因此在vd 到 dispatcher直接传递的都是可以取消发送的消息" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
           <mxGeometry x="-11" y="245" width="784" height="26" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="uDreEvTKcIJWA-16eszm" name="接口-类图">
+    <mxGraphModel dx="692" dy="521" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="GSloe0gi9MpvulQLaLJF-1" value="«interface»&lt;br&gt;repository" style="html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="250" y="200" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-2" value="«interface»&lt;br&gt;connection" style="html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="440" y="370" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-3" value="«interface»&lt;br&gt;connection" style="html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="590" y="90" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-7" value="implements" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="GSloe0gi9MpvulQLaLJF-4" target="GSloe0gi9MpvulQLaLJF-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-13" value="uses" style="edgeStyle=elbowEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="GSloe0gi9MpvulQLaLJF-4" target="GSloe0gi9MpvulQLaLJF-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-4" value="redis repo" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=29;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="110" y="440" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-6" value="SetConnection(ctx, id, connection)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="GSloe0gi9MpvulQLaLJF-4">
+          <mxGeometry y="29" width="190" height="61" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="GSloe0gi9MpvulQLaLJF-8" target="GSloe0gi9MpvulQLaLJF-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-11" value="implements" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="GSloe0gi9MpvulQLaLJF-10">
+          <mxGeometry x="-0.0318" y="3" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-8" value="udp connection" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=29;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="355" y="570" width="140" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="GSloe0gi9MpvulQLaLJF-14" target="GSloe0gi9MpvulQLaLJF-2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="600" y="500" />
+              <mxPoint x="495" y="500" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-16" value="implements" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="GSloe0gi9MpvulQLaLJF-15">
+          <mxGeometry x="-0.0097" y="-3" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-14" value="mock connection" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=29;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="560" y="570" width="140" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-19" value="获取" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="GSloe0gi9MpvulQLaLJF-17" target="GSloe0gi9MpvulQLaLJF-18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-17" value="redis repo" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="760" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="GSloe0gi9MpvulQLaLJF-18" value="Connection Store" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="375" y="700" width="120" height="60" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

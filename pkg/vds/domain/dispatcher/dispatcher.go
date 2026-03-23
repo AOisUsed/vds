@@ -91,7 +91,7 @@ func (d *Dispatcher) dispatchUnicast(ctx context.Context, msg message.Message) {
 		log.Printf("无法解码消息:%v \n", err)
 	}
 
-	if err = d.sender.Send(dstConn, data); err != nil {
+	if err = d.sender.Send(ctx, dstConn, data); err != nil {
 		log.Printf("无法给 %s 发送消息: %v", msg.DstID, err)
 	}
 }
@@ -141,7 +141,7 @@ func (d *Dispatcher) dispatchBroadcast(ctx context.Context, msg message.Message)
 				log.Printf("无法解码消息:%v \n", err)
 			}
 
-			if err = d.sender.Send(dstConn, data); err != nil && !errors.Is(err, context.Canceled) {
+			if err = d.sender.Send(ctx, dstConn, data); err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("无法获取多播消息目标设备 %s 的地址: %v\n", dstID, err)
 				return
 			}

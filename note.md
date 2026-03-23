@@ -11,3 +11,20 @@
 - TerminateAndDeregisterDevice(ctx, id)
 
 
+
+
+## Connection 问题
+- redisRepo 操作:
+  - 获得 Connection类型
+    - 得到 connection -> 转化(？谁来做这个工作) 为 可以存入redis的类型
+  - 存入 Connection
+    - 把 connection 转化为数据类型， 存入redis
+
+  两个部分： 
+  - connection -> 数据结构
+  - connection 数据结构 -> 活的连接(完整的生命周期)
+
+
+  
+
+

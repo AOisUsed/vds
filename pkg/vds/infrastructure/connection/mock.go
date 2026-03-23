@@ -1,6 +1,7 @@
 package connection
 
 import (
+	"context"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -18,12 +19,7 @@ func NewConn() *Conn {
 	}
 }
 
-// Serve 用来模拟真实connection的开启关闭，mock使用channel没有真正的建立连接，省略
-func (c *Conn) Serve() error {
-	return nil
-}
-
-func (c *Conn) Send(data []byte) error {
+func (c *Conn) Send(ctx context.Context, data []byte) error {
 	if c.closed.Load() {
 		return nil
 	}
@@ -37,7 +33,7 @@ func (c *Conn) Send(data []byte) error {
 
 }
 
-func (c *Conn) Receive() ([]byte, error) {
+func (c *Conn) Receive(ctx context.Context) ([]byte, error) {
 	if c.closed.Load() {
 		// 检查是否还有数据可读
 		select {
