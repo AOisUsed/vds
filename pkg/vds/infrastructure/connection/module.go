@@ -11,13 +11,11 @@ import (
 func newConnection(kind string, lc fx.Lifecycle) connection.Connection {
 
 	if kind == "mock" {
-		conn := NewConn()
+		conn := NewMockConn()
 		lc.Append(fx.Hook{
 			OnStart: func(context.Context) error {
-				log.Println("正在启动 mock connection")
-				err := conn.Serve()
 				log.Println("mock connection 启动成功")
-				return err
+				return nil
 			},
 			OnStop: func(context.Context) error {
 				log.Println("正在关闭 mock connection")

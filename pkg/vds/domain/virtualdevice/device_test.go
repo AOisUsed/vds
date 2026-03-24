@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 	"virturalDevice/pkg/vds/domain/message"
-	"virturalDevice/pkg/vds/infrastructure"
+	"virturalDevice/pkg/vds/infrastructure/deviceparams"
 )
 
 func TestDeviceSend(t *testing.T) {
 
 	inCh := make(chan message.Message)
-	dv := NewVirtualDevice("1", inCh, WithParams(infrastructure.NewRadioParams()))
+	dv := NewVirtualDevice("1", inCh, WithParams(deviceparams.NewRadioParams()))
 
 	outCh := dv.OutChan()
 
@@ -42,7 +42,7 @@ func TestDeviceSend(t *testing.T) {
 func TestDeviceReceive(t *testing.T) {
 
 	inCh := make(chan message.Message)
-	dv := NewVirtualDevice("1", inCh, WithParams(infrastructure.NewRadioParams()))
+	dv := NewVirtualDevice("1", inCh, WithParams(deviceparams.NewRadioParams()))
 	go dv.Run()
 
 	for i := 0; i < 10; i++ {

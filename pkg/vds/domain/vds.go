@@ -86,7 +86,7 @@ func (vds *VDS) listenConnection() {
 	defer close(vds.incomingCh)
 
 	for {
-		data, err := vds.conn.Receive(context.Background()) // todo: 可能要修改，目前只是为了满足接口要求
+		data, err := vds.conn.Receive(context.Background()) // todo: 可能要修改,使用更有意义的context，目前只是为了满足接口要求
 		if err != nil {
 			if err != io.EOF {
 				log.Printf("无法从连接读取数据:%v \n", err)

@@ -12,9 +12,11 @@ import (
 	"time"
 	"virturalDevice/pkg/vds/domain/message"
 	"virturalDevice/pkg/vds/domain/virtualdevice"
-	"virturalDevice/pkg/vds/infrastructure"
 	"virturalDevice/pkg/vds/infrastructure/codec"
 	"virturalDevice/pkg/vds/infrastructure/connection"
+	"virturalDevice/pkg/vds/infrastructure/connection/netconn"
+	"virturalDevice/pkg/vds/infrastructure/data/redis"
+	"virturalDevice/pkg/vds/infrastructure/deviceparams"
 	"virturalDevice/pkg/vds/infrastructure/repository"
 	"virturalDevice/pkg/vds/infrastructure/sender"
 	"virturalDevice/utils"
@@ -24,7 +26,7 @@ import (
 
 // 单机使用vds (repo仅在此vds中)
 func NewMockVDS() *VDS {
-	conn := connection.NewConn()
+	conn := connection.NewMockConn()
 	repo := repository.NewVDRepository(time.Millisecond * 600)
 	sender := sender.NewSender()
 	jsonCodec := codec.NewCodec()
@@ -193,12 +195,12 @@ func TestBasicCommunication(t *testing.T) {
 	// vds1, vds2 公用的repository (临时使用)
 	repo := repository.NewVDRepository(time.Millisecond * 1)
 	// 创造并启动 vds1
-	vds1 := NewVDS(connection.NewConn(), repo, sender.NewSender(), codec.NewCodec())
+	vds1 := NewVDS(connection.NewMockConn(), repo, sender.NewSender(), codec.NewCodec())
 	wg.Add(1)
 	vds1.Start()
 
 	// 创造并启动 vds2
-	vds2 := NewVDS(connection.NewConn(), repo, sender.NewSender(), codec.NewCodec())
+	vds2 := NewVDS(connection.NewMockConn(), repo, sender.NewSender(), codec.NewCodec())
 	wg.Add(1)
 	vds2.Start()
 
@@ -260,7 +262,143 @@ func TestBasicCommunication(t *testing.T) {
 		Payload: []byte("2发出的广播"),
 	})
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
+
+	fmt.Println("\n 即将开始关闭vds")
+	// 停止 vds
+	vds1.Stop()
+	wg.Done()
+
+	vds2.Stop()
+	wg.Done()
+
+	wg.Wait()
+}
+
+func TestRedisUDPBasedCommunication(t *testing.T) {
+	var wg sync.WaitGroup
+	// 初始化
+	// 公用的sender, coder
+	defaultSender := sender.NewSender()
+	jsonCodec := codec.NewCodec()
+
+	// 公用的redis
+	redisCfg := redis.Config{
+		Addr:     "192.168.0.175:6379",
+		Password: "",
+		DB:       15,
+	}
+
+	// 连接配置
+	connCfgs := make([]*netconn.Config, 0, 2)
+
+	connCfgs = append(connCfgs, &netconn.Config{
+		LocalHost: "127.0.0.1",
+		LocalPort: 8081,
+	}, &netconn.Config{
+		LocalHost: "127.0.0.1",
+		LocalPort: 8082,
+	})
+
+	// vds
+	vdss := make([]*VDS, 0, 2)
+
+	for i := 0; i < 2; i++ {
+		udpConn, _ := netconn.NewUDPConnection(connCfgs[i])
+		redisManager := redis.NewManager(redisCfg)
+		connStore := netconn.NewStore()
+		redisRepo := repository.NewRedisVDRepo(redisManager.GetClient(), connStore)
+
+		vds := NewVDS(udpConn, redisRepo, defaultSender, jsonCodec)
+		vdss = append(vdss, vds)
+
+		// 启动 redis.Client   (实际使用时不应该在初始化时启动，此处只是为了方便)
+		err := redisManager.Connect(context.Background())
+		if err != nil {
+			log.Println(err.Error())
+		}
+
+		defer func(redisManager *redis.Manager, ctx context.Context) {
+			err := redisManager.Close(ctx)
+			if err != nil {
+				log.Println(err.Error())
+			}
+		}(redisManager, context.Background())
+		defer func(connStore *netconn.Store) {
+			err := connStore.CloseAll()
+			if err != nil {
+				log.Println(err.Error())
+			}
+		}(connStore)
+	}
+
+	vds1 := vdss[0]
+	vds2 := vdss[1]
+
+	// 启动
+	wg.Add(2)
+	vds1.Start()
+	vds2.Start()
+
+	// vds1 中注册设备1连接信息，更新设备参数
+	err := vds1.ActivateAndRegisterDevice(context.Background(), "1")
+	if err != nil {
+		log.Println(err.Error())
+	}
+	err = vds1.syncDeviceParams(context.Background(), "1")
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	// vds2 中注册设备2连接信息，更新设备参数
+	err = vds2.ActivateAndRegisterDevice(context.Background(), "2")
+	if err != nil {
+		log.Println(err.Error())
+	}
+	err = vds2.syncDeviceParams(context.Background(), "2")
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	// vds2 中注册设备3连接信息，更新设备参数
+	err = vds2.ActivateAndRegisterDevice(context.Background(), "3")
+	if err != nil {
+		log.Println(err.Error())
+	}
+	err = vds2.syncDeviceParams(context.Background(), "3")
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	// 设备1 给 设备2 发送消息
+	_ = vds1.SendMessage(message.Message{
+		SrcID:   "1",
+		DstID:   "2",
+		Payload: []byte("message 1->2"),
+	})
+
+	// 设备2 给 设备1 发送消息
+	_ = vds2.SendMessage(message.Message{
+		SrcID:   "2",
+		DstID:   "1",
+		Payload: []byte("message 2->1"),
+	})
+
+	// 设备1 发出广播
+	_ = vds2.SendMessage(message.Message{
+		SrcID:   "1",
+		DstID:   "",
+		Payload: []byte("1发出的广播"),
+	})
+
+	// 设备2 发出广播
+	_ = vds2.SendMessage(message.Message{
+		SrcID:   "2",
+		DstID:   "",
+		Payload: []byte("2发出的广播"),
+	})
+
+	time.Sleep(5 * time.Second)
 
 	fmt.Println("\n 即将开始关闭vds")
 	// 停止 vds
@@ -283,7 +421,7 @@ func TestConcurrentCommunication(t *testing.T) {
 	// 创造并启动数个vds
 	var vdss []*VDS
 	for i := 0; i < 3; i++ {
-		vdss = append(vdss, NewVDS(connection.NewConn(), repo, sender.NewSender(), codec.NewCodec()))
+		vdss = append(vdss, NewVDS(connection.NewMockConn(), repo, sender.NewSender(), codec.NewCodec()))
 		wg.Add(1)
 		vdss[i].Start()
 	}
@@ -348,7 +486,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 	// 创造并启动数个vds
 	var vdss []*VDS
 	for i := 0; i < 2; i++ {
-		vdss = append(vdss, NewVDS(connection.NewConn(), repo, sender.NewSender(), codec.NewCodec()))
+		vdss = append(vdss, NewVDS(connection.NewMockConn(), repo, sender.NewSender(), codec.NewCodec()))
 		wg.Add(1)
 		vdss[i].Start()
 	}
@@ -365,7 +503,7 @@ func TestBasicParamMatchCommunication(t *testing.T) {
 					mode := rand.Int() % 3
 					err := vds.ActivateAndRegisterDevice(context.Background(), id,
 						virtualdevice.WithParams(
-							infrastructure.NewRadioParams(infrastructure.WithMode(mode)),
+							deviceparams.NewRadioParams(deviceparams.WithMode(mode)),
 						),
 					)
 					if err != nil {
@@ -415,14 +553,14 @@ func TestHighConcurrentParamsSyncer(t *testing.T) {
 	// 创造并启动数个vds
 	var vdss []*VDS
 	for i := 0; i < 1; i++ {
-		vdss = append(vdss, NewVDS(connection.NewConn(), repo, sender.NewSender(), codec.NewCodec()))
+		vdss = append(vdss, NewVDS(connection.NewMockConn(), repo, sender.NewSender(), codec.NewCodec()))
 		wg.Add(1)
 		vdss[i].Start()
 	}
 
 	vds0 := vdss[0]
 
-	_ = vds0.ActivateAndRegisterDevice(context.Background(), "1", virtualdevice.WithParams(infrastructure.NewRadioParams()))
+	_ = vds0.ActivateAndRegisterDevice(context.Background(), "1", virtualdevice.WithParams(deviceparams.NewRadioParams()))
 
 	var syncWg sync.WaitGroup
 

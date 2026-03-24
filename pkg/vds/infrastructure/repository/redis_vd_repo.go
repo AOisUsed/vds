@@ -9,6 +9,8 @@ import (
 	"virturalDevice/pkg/vds/domain/connection"
 	"virturalDevice/pkg/vds/domain/repository"
 	"virturalDevice/pkg/vds/domain/virtualdevice/params"
+	"virturalDevice/pkg/vds/infrastructure/connection/netconn"
+	"virturalDevice/pkg/vds/infrastructure/deviceparams"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -19,16 +21,20 @@ const (
 	keyPrefixConnection = "vd:conn:"
 )
 
-// redisVDRepo 实现
-type redisVDRepo struct {
-	client *redis.Client
+// RedisVDRepo 使用redis作为底层数据库的数据仓库，
+// 使用 connStore 来把redis中的连接配置转化为真实的连接输出，
+// 以及把真实的连接类型转化为配置持久化到redis中。
+type RedisVDRepo struct {
+	client    *redis.Client
+	connStore *netconn.Store
 }
 
 // NewRedisVDRepo 构造函数
 // 需要传入一个已经初始化好的 Redis Client
-func NewRedisVDRepo(client *redis.Client) repository.VDRepository {
-	return &redisVDRepo{
-		client: client,
+func NewRedisVDRepo(client *redis.Client, store *netconn.Store) repository.VDRepository {
+	return &RedisVDRepo{
+		client:    client,
+		connStore: store,
 	}
 }
 
@@ -51,26 +57,42 @@ func unmarshal(data string, v any) error {
 
 // --- 实现 Params 相关方法 ---
 
-func (r *redisVDRepo) Params(ctx context.Context, id string) (params.Params, error) {
-	var p params.Params
+func (r *RedisVDRepo) Params(ctx context.Context, id string) (params.Params, error) {
+
 	key := fmt.Sprintf("%s%s", keyPrefixParams, id)
 
+	// 获取 params 值
 	val, err := r.client.Get(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
-		return p, fmt.Errorf("params not found for id: %s", id)
+		return nil, fmt.Errorf("params not found for id: %s", id)
 	}
 	if err != nil {
-		return p, err
+		return nil, err
 	}
 
-	if err := unmarshal(val, &p); err != nil {
+	var t struct {
+		Type string `json:"type"`
+	}
+	_ = json.Unmarshal([]byte(val), &t)
+
+	var p params.Params
+
+	switch t.Type {
+	case "RadioParams":
+		p = &deviceparams.RadioParams{}
+	// case "..." : .....   // 如果后续需要扩展，可以添加其他种类Params,
+	default:
+		p = params.NewEmpty()
+	}
+
+	if err = unmarshal(val, &p); err != nil {
 		return p, fmt.Errorf("failed to unmarshal params: %w", err)
 	}
 
 	return p, nil
 }
 
-func (r *redisVDRepo) SetParams(ctx context.Context, id string, p params.Params) error {
+func (r *RedisVDRepo) SetParams(ctx context.Context, id string, p params.Params) error {
 	key := fmt.Sprintf("%s%s", keyPrefixParams, id)
 
 	val, err := marshal(p)
@@ -82,12 +104,12 @@ func (r *redisVDRepo) SetParams(ctx context.Context, id string, p params.Params)
 	return r.client.Set(ctx, key, val, time.Hour).Err()
 }
 
-func (r *redisVDRepo) RemoveParams(ctx context.Context, id string) error {
+func (r *RedisVDRepo) RemoveParams(ctx context.Context, id string) error {
 	key := fmt.Sprintf("%s%s", keyPrefixParams, id)
 	return r.client.Del(ctx, key).Err()
 }
 
-func (r *redisVDRepo) AllParams(ctx context.Context) (map[string]params.Params, error) {
+func (r *RedisVDRepo) AllParams(ctx context.Context) (map[string]params.Params, error) {
 	result := make(map[string]params.Params)
 	pattern := fmt.Sprintf("%s*", keyPrefixParams)
 
@@ -148,41 +170,54 @@ func (r *redisVDRepo) AllParams(ctx context.Context) (map[string]params.Params, 
 }
 
 // --- 实现 Connection 相关方法 ---
-// 逻辑与 Params 完全一致，只是 Key 前缀和类型不同
 
-func (r *redisVDRepo) Connection(ctx context.Context, id string) (connection.Connection, error) {
-	var c connection.Connection
+func (r *RedisVDRepo) Connection(ctx context.Context, id string) (connection.Connection, error) {
+
+	// 从数据库获取连接的配置文件
 	key := fmt.Sprintf("%s%s", keyPrefixConnection, id)
-
 	val, err := r.client.Get(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
-		return c, fmt.Errorf("connection not found for id: %s", id)
+		return nil, fmt.Errorf("没有找到设备id %s 的连接", id)
 	}
 	if err != nil {
-		return c, err
+		return nil, err
 	}
 
-	if err := unmarshal(val, &c); err != nil {
-		return c, fmt.Errorf("failed to unmarshal connection: %w", err)
+	var config netconn.Config
+	if err = unmarshal(val, &config); err != nil {
+		return nil, fmt.Errorf("无法反序列化连接配置: %w", err)
 	}
 
-	return c, nil
+	// 使用 conn store 获取连接
+	conn, err := r.connStore.GetConnection(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
-func (r *redisVDRepo) SetConnection(ctx context.Context, id string, conn connection.Connection) error {
+func (r *RedisVDRepo) SetConnection(ctx context.Context, id string, conn connection.Connection) error {
 	key := fmt.Sprintf("%s%s", keyPrefixConnection, id)
 
-	val, err := marshal(conn)
+	configurableConn, ok := conn.(netconn.Configurable)
+	if !ok {
+		return fmt.Errorf("连接方式没有实现configurable接口，无法持久化到数据库中")
+	}
+
+	// 把连接的配置文件，而不是其本身持久化到redis中
+	val, err := marshal(configurableConn.Config())
 	if err != nil {
 		return err
 	}
 
+	// 存入redis
 	// 连接信息通常有过期时间，比如心跳超时时间 * 2
 	// 这里暂设 1 小时，具体看业务需求
 	return r.client.Set(ctx, key, val, time.Hour).Err()
 }
 
-func (r *redisVDRepo) RemoveConnection(ctx context.Context, id string) error {
+func (r *RedisVDRepo) RemoveConnection(ctx context.Context, id string) error {
 	key := fmt.Sprintf("%s%s", keyPrefixConnection, id)
 	return r.client.Del(ctx, key).Err()
 }

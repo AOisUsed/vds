@@ -1,4 +1,16 @@
-package connection
+package netconn
+
+// Config 连接信息， 用于序列化
+type Config struct {
+	Host string `json:"host,omitempty"` // 远程地址
+	Port int    `json:"port,omitempty"` // 远程地址端口
+
+	LocalHost string `json:"local_host,omitempty"` // 例如: "0.0.0.0" 或特定网卡 IP
+	LocalPort int    `json:"local_port,omitempty"` // 例如: 6000
+
+	// 连接类型 如 “udp”
+	Type string `json:"type"`
+}
 
 // Configurable 这是 connection 类型的一个可选接口，用于判断该连接是否可以获取配置
 //
@@ -10,16 +22,4 @@ package connection
 // mock connection 不需要实现这个接口，因为没有持久化需求
 type Configurable interface {
 	Config() *Config
-}
-
-// Config 连接信息， 用于序列化
-type Config struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
-
-	LocalHost string `json:"local_host,omitempty"` // 例如: "0.0.0.0" 或特定网卡 IP
-	LocalPort int    `json:"local_port,omitempty"` // 例如: 6000
-
-	// 连接类型 如 “udp”
-	Type string `json:"type"`
 }

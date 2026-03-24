@@ -1,4 +1,4 @@
-package infrastructure
+package deviceparams
 
 import (
 	"virturalDevice/pkg/vds/domain/virtualdevice/params"
@@ -8,6 +8,7 @@ type RadioParams struct {
 	Mode       int
 	IsOn       bool
 	CryptoMode int
+	TypeTag    string `json:"type"`
 }
 
 type Option func(*RadioParams)
@@ -35,6 +36,7 @@ func NewRadioParams(ops ...Option) *RadioParams {
 		Mode:       0,
 		IsOn:       false,
 		CryptoMode: 0,
+		TypeTag:    "RadioParams",
 	}
 
 	for _, op := range ops {
@@ -44,11 +46,15 @@ func NewRadioParams(ops ...Option) *RadioParams {
 }
 
 func (p *RadioParams) IsCompatibleWith(other params.Params) bool {
-	otherRaPa, ok := other.(*RadioParams)
-	if !ok {
+	if p.Type() != other.Type() {
 		return false
 	}
+	otherRaPa := other.(*RadioParams)
 	return p.Mode == otherRaPa.Mode &&
 		p.IsOn == otherRaPa.IsOn &&
 		p.CryptoMode == otherRaPa.CryptoMode
+}
+
+func (p *RadioParams) Type() string {
+	return p.TypeTag
 }

@@ -6,7 +6,7 @@
 ## 开始使用
 ### 一次简单的通信 
 以下流程具体代码操作见 `vds_test.go` 文件中 `TestBasicCommunication()` 测试,
-流程图见`vds图示` 中`消息通信流程`tab
+流程图见`vds图示` 中`消息通信流程`页
 
 准备：
 1. 创建公用数据源作为注册中心以供多个vds查询设备物理通讯信息
@@ -22,6 +22,12 @@
 
 结束：
 6. 完成流程后调用`vds.Stop()`会停止所有vds中的设备和正在运行的模块并退出。
+
+
+
+### 使用UDP连接和Redis数据库来实现
+- 见 `vds图示` 中 `vds依赖关系和生命周期控制`页，有需要的模块和初始化方法
+- 示例见`vds_test.go`文件中的`TestRedisUDPBasedCommunication`
 
 ## VDS 模块
 ### Ingress Router
