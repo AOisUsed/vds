@@ -47,6 +47,9 @@ type VDS struct {
 	rwMutex   sync.RWMutex
 	startOnce sync.Once
 	stopOnce  sync.Once
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewVDS 初始化VDS(无设备)
@@ -86,12 +89,16 @@ func (vds *VDS) listenConnection() {
 	defer close(vds.incomingCh)
 
 	for {
-		data, err := vds.conn.Receive(context.Background()) // todo: 可能要修改,使用更有意义的context，目前只是为了满足接口要求
-		if err != nil {
+		data, err := vds.conn.Receive(vds.ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
 			if err != io.EOF {
 				log.Printf("无法从连接读取数据:%v \n", err)
-				time.Sleep(3 * time.Second) // 出现EOF外其他error后, 5秒后再重新尝试读数据
-				continue
+				select {
+				case <-vds.ctx.Done():
+					return
+				case <-time.After(time.Second * 5): // 出现EOF外其他error后, 5秒后再重新尝试读数据
+					continue
+				}
 			}
 			log.Printf("连接关闭，停止从中读取数据\n")
 			return
@@ -328,6 +335,7 @@ func (vds *VDS) TerminateAndDeregisterDevice(ctx context.Context, id string) err
 // 第一次执行后，后续调用都是无操作
 func (vds *VDS) Start() {
 	vds.startOnce.Do(func() {
+		vds.ctx, vds.cancel = context.WithCancel(context.Background())
 		//log.Println("正在启动 vds ")
 		go vds.dispatcher.Run()
 		go vds.ingressRouter.Run()
@@ -343,9 +351,14 @@ func (vds *VDS) Stop() {
 		vds.rwMutex.Lock()
 		defer vds.rwMutex.Unlock()
 
-		err := vds.conn.Close()
-		if err != nil {
-			log.Printf("连接关闭失败:%v \n", err)
+		if vds.cancel != nil {
+			vds.cancel()
+		}
+		if vds.conn != nil {
+			err := vds.conn.Close()
+			if err != nil {
+				log.Printf("连接关闭失败:%v \n", err)
+			}
 		}
 
 		vds.ingressRouter.Stop()

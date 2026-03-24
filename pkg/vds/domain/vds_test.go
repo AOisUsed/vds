@@ -275,6 +275,72 @@ func TestBasicCommunication(t *testing.T) {
 	wg.Wait()
 }
 
+// NewRedisUDPBasedVDSs 用于初始vds集群的函数
+// 在使用结束后应该依次关闭vds, connection store 还有redis连接
+func NewRedisUDPBasedVDSs(num int) ([]*VDS, []*netconn.Store, []*redis.Manager) {
+	// 初始化
+	// 公用的sender, coder
+	defaultSender := sender.NewSender()
+	jsonCodec := codec.NewCodec()
+
+	// 公用的redis
+	redisCfg := redis.Config{
+		Addr:     "192.168.0.175:6379",
+		Password: "",
+		DB:       15,
+	}
+
+	// 连接配置
+	connCfgs := make([]*netconn.Config, 0, num)
+
+	for i := 0; i < num; i++ {
+		connCfg := &netconn.Config{
+			LocalHost: "127.0.0.1",
+			LocalPort: 8081 + i, // 从8081端口开始，为每个vds分配一个udp地址, 运行中可能会有端口被占用的情况，调整此处即可
+		}
+		connCfgs = append(connCfgs, connCfg)
+	}
+
+	// vds
+	vdss := make([]*VDS, 0, num)
+	stores := make([]*netconn.Store, 0, num)
+	managers := make([]*redis.Manager, 0, num)
+
+	for i := 0; i < num; i++ {
+		udpConn, _ := netconn.NewUDPConnection(connCfgs[i])
+		redisManager := redis.NewManager(redisCfg)
+		connStore := netconn.NewStore()
+		redisRepo := repository.NewRedisVDRepo(redisManager.GetClient(), connStore)
+
+		vds := NewVDS(udpConn, redisRepo, defaultSender, jsonCodec)
+		vdss = append(vdss, vds)
+
+		// 启动 redis.Client   (实际使用时不应该在初始化时启动，此处只是为了方便)
+		err := redisManager.Connect(context.Background())
+		if err != nil {
+			log.Println(err.Error())
+		}
+
+		// 释放资源
+		//defer func(redisManager *redis.Manager, ctx context.Context) {
+		//	err := redisManager.Close(ctx)
+		//	if err != nil {
+		//		log.Println(err.Error())
+		//	}
+		//}(redisManager, context.Background())
+		//defer func(connStore *netconn.Store) {
+		//	err := connStore.CloseAll()
+		//	if err != nil {
+		//		log.Println(err.Error())
+		//	}
+		//}(connStore)
+
+		stores = append(stores, connStore)
+		managers = append(managers, redisManager)
+	}
+	return vdss, stores, managers
+}
+
 func TestRedisUDPBasedCommunication(t *testing.T) {
 	var wg sync.WaitGroup
 	// 初始化
@@ -470,6 +536,79 @@ func TestConcurrentCommunication(t *testing.T) {
 	for _, vds := range vdss {
 		vds.Stop()
 		wg.Done()
+	}
+
+	fmt.Printf("goroutine number: %v \n", runtime.NumGoroutine())
+
+	wg.Wait()
+}
+
+func TestRedisUDPConcurrentCommunication(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	var wg sync.WaitGroup
+
+	var num = 5
+	vdss, stores, managers := NewRedisUDPBasedVDSs(num)
+
+	for _, vds := range vdss {
+		vds.Start()
+	}
+
+	wg.Add(num)
+
+	// 创造并启动数个vds
+
+	idg := utils.NewIdGenerator()
+
+	for _, vds := range vdss {
+		// 每个 vds 中产生数个 vd
+		numVD := rand.Int() % 2000
+		//numVD := 5
+		// 每个 vds 并发产生多个 vd,并发送消息
+		go func(vds *VDS) {
+			for j := 0; j < numVD; j++ {
+				id := idg.Next()
+				go func(vds *VDS) {
+					err := vds.ActivateAndRegisterDevice(context.Background(), id)
+					if err != nil {
+						log.Println(err.Error())
+					}
+					//err = vds.syncDeviceParams(context.Background(), id)
+
+					dstId := rand.Int() % idg.Max()
+					if dstId%3 != 0 {
+						_ = vds.SendMessage(message.Message{
+							SrcID:   id,
+							DstID:   strconv.Itoa(dstId),
+							Payload: []byte(fmt.Sprintf("message %v->%d", id, dstId)),
+						})
+					} else {
+						_ = vds.SendMessage(message.Message{
+							SrcID:   id,
+							DstID:   "",
+							Payload: []byte(fmt.Sprintf(" %v broadcast message ", id)),
+						})
+					}
+
+				}(vds)
+			}
+		}(vds)
+	}
+
+	// 等待发送完成
+	time.Sleep(10 * time.Second)
+	fmt.Println("\n 即将开始关闭vds")
+	// 停止 vds
+	for _, vds := range vdss {
+		vds.Stop()
+		wg.Done()
+	}
+
+	for _, store := range stores {
+		store.CloseAll()
+	}
+	for _, manager := range managers {
+		manager.Close(context.Background())
 	}
 
 	fmt.Printf("goroutine number: %v \n", runtime.NumGoroutine())
