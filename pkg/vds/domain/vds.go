@@ -71,15 +71,17 @@ func NewVDS(conn connection.Connection, repo repository.VDRepository, sender sen
 
 // SendMessage 由vds处理，通过解析 message 的内部信息，调用对应的消息来源设备发送消息给目标设备
 func (vds *VDS) SendMessage(msg message.Message) error {
-	vds.rwMutex.RLock()
-	defer vds.rwMutex.RUnlock()
-
 	srcId := msg.SrcID
 	dstId := msg.DstID
+
+	vds.rwMutex.RLock()
 	device, ok := vds.vdById[srcId]
+	vds.rwMutex.RUnlock()
+
 	if !ok {
 		return errors.New(fmt.Sprintf("%v设备不存在", srcId))
 	}
+
 	device.SendMessage(dstId, msg.Payload)
 	return nil
 }
@@ -187,7 +189,6 @@ func (vds *VDS) triggerParamsSync(id string) {
 // runParamsSyncListener 创建并启动参数同步监听器：持续监听“把本地设备的参数上传到数据中心中”的请求,并执行。有失败重传机制 (并发不安全)
 func (vds *VDS) runParamsSyncListener(id string) {
 	// 创建 参数同步器
-	devId := id
 	syncTrigger := make(chan struct{}, 1)
 	vds.rwMutex.Lock()
 	vds.paramsSyncerTriggerById[id] = syncTrigger
@@ -196,11 +197,11 @@ func (vds *VDS) runParamsSyncListener(id string) {
 	// 循环运行 参数同步处理器
 	// 工作模式：接收到 syncTrigger 信号，则上传设备参数
 	for range syncTrigger {
-		err := vds.syncDeviceParams(context.Background(), devId)
+		err := vds.syncDeviceParams(context.Background(), id)
 		if err != nil {
 			// 如果上传失败，通过给needSync发送通知，传达重试意图
 			time.Sleep(1 * time.Second) // 退避重试: 失败过一段时间后才重试，防止雪崩。可以改变sleep的时长调整重试延时
-			vds.triggerParamsSyncUnsafe(devId)
+			vds.triggerParamsSync(id)
 		}
 		//time.Sleep(300 * time.Millisecond) // 可以在这里添加休眠时间，防止用户高频率更改设备参数产生的数据仓库写入压力
 		log.Printf("设备 %v 同步了设备参数到数据仓库中", id)
